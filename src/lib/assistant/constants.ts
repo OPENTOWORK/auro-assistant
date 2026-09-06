@@ -86,6 +86,23 @@ export const ASSISTANT_TOOLS: FunctionTool[] = [
   },
   {
     type: "function",
+    name: "get_daily_briefing",
+    description:
+      "Briefing estructurado del día: prioridades, agenda, vencidas, bloqueadas, esperando aprobación, proyectos estancados/vencidos/bloqueados, correos importantes y alertas. No recalcula scores. Para un resumen de la mañana o qué necesita atención, no para decidir una sola siguiente tarea.",
+    parameters: {
+      type: "object",
+      properties: {
+        available_minutes: {
+          type: "integer",
+          description: "Minutos disponibles ahora (15–720). Si se indica, incluye focus_plan del Decision Engine.",
+        },
+      },
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: "function",
     name: "get_user_memory",
     description:
       "Memoria confirmada del usuario: nombre, preferencias, proyectos prioritarios, rutinas e instrucciones.",
@@ -168,6 +185,7 @@ export const CHAT_SUGGESTIONS = [
   "Resume mis correos destacados",
   "¿Cómo va Dralo?",
   "Crea una tarea",
+  "Dame el briefing de hoy",
   "Prepara mi día",
 ] as const;
 
