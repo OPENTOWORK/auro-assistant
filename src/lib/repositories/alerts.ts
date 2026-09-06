@@ -100,24 +100,48 @@ export interface EnsureDailyBriefingAlertResult {
 
 export class DailyBriefingAlertCollisionError extends Error {
   constructor() {
-    super("El id de la alerta del briefing ya existe con otro origen");
+    super("La alerta existente no coincide con el briefing diario");
     this.name = "DailyBriefingAlertCollisionError";
   }
+}
+
+export function matchesDailyBriefingAlert(
+  existing: Pick<
+    Alert,
+    "source" | "title" | "message" | "severity" | "project_id"
+  >,
+  expected: {
+    title: string;
+    message: string;
+    severity: Alert["severity"];
+  }
+): boolean {
+  return (
+    existing.source === DAILY_BRIEFING_ALERT_SOURCE &&
+    existing.title === expected.title &&
+    existing.message === expected.message &&
+    existing.severity === expected.severity &&
+    existing.project_id === null
+  );
 }
 
 export async function ensureDailyBriefingAlert(input: {
   run: Pick<DailyBriefingRun, "id" | "briefing_date" | "summary">;
   severity: Alert["severity"];
 }): Promise<EnsureDailyBriefingAlertResult> {
+  const expectedTitle = `Briefing diario · ${input.run.briefing_date}`;
+  const expectedMessage = input.run.summary;
+  const expectedSeverity = input.severity;
+
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("alerts")
     .insert({
       id: input.run.id,
       owner_key: AURO_OWNER_KEY,
-      title: `Briefing diario · ${input.run.briefing_date}`,
-      message: input.run.summary,
-      severity: input.severity,
+      title: expectedTitle,
+      message: expectedMessage,
+      severity: expectedSeverity,
       source: DAILY_BRIEFING_ALERT_SOURCE,
       project_id: null,
       is_read: false,
@@ -144,7 +168,14 @@ export async function ensureDailyBriefingAlert(input: {
   if (!existing) {
     throw new Error("Alert unique violation but existing alert not found");
   }
-  if (existing.source !== DAILY_BRIEFING_ALERT_SOURCE) {
+
+  if (
+    !matchesDailyBriefingAlert(existing as Alert, {
+      title: expectedTitle,
+      message: expectedMessage,
+      severity: expectedSeverity,
+    })
+  ) {
     throw new DailyBriefingAlertCollisionError();
   }
 
