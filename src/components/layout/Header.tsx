@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { AppIcon } from "@/components/ui/AppIcon";
+import { Button } from "@/components/ui/Button";
 import { APP_LOGO_ICON, NAV_ICONS } from "@/lib/icons";
 
 const navItems = [
@@ -14,6 +15,13 @@ const navItems = [
 
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-auro-border bg-auro-bg/95 backdrop-blur-sm">
@@ -38,6 +46,9 @@ export function Header() {
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-xs text-auro-muted">Activo</span>
             </div>
+            <Button type="button" variant="ghost" size="sm" onClick={handleLogout}>
+              Salir
+            </Button>
           </div>
         </div>
 

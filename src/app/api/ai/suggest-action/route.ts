@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import { getOpenAIClient } from "@/lib/openai";
-import { createClient } from "@/lib/supabase/server";
 import { aiSuggestActionSchema } from "@/lib/validations";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
 
   let body: unknown;
   try {

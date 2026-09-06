@@ -1,13 +1,20 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { ensureAuthUser } from "@/lib/auth/ensure-user";
+import { createClient } from "@/lib/supabase/server";
+import { getConfiguredOwnerEmail } from "@/lib/auth/owner-email";
 import { isSupabaseConfigured } from "@/lib/config";
 
 export async function POST(request: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
-      { error: "Supabase no configurado" },
+      { error: "Servicio de acceso no disponible" },
+      { status: 503 }
+    );
+  }
+
+  const ownerEmail = getConfiguredOwnerEmail();
+  if (!ownerEmail) {
+    return NextResponse.json(
+      { error: "Configuración de acceso incompleta" },
       { status: 503 }
     );
   }
@@ -29,47 +36,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const cookieStore = await cookies();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: {
-          name: string;
-          value: string;
-          options: CookieOptions;
-        }[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  let signIn = await supabase.auth.signInWithPassword({ email, password });
-
-  if (signIn.error) {
-    try {
-      await ensureAuthUser(email, password);
-      signIn = await supabase.auth.signInWithPassword({ email, password });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "No se pudo crear el usuario";
-      return NextResponse.json({ error: message }, { status: 500 });
-    }
+  if (email !== ownerEmail) {
+    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
   }
 
-  if (signIn.error) {
-    return NextResponse.json(
-      { error: signIn.error.message },
-      { status: 401 }
-    );
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
   }
 
   return NextResponse.json({ ok: true });

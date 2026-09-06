@@ -7,12 +7,16 @@ import {
 } from "@/lib/repositories/projects";
 import { isSupabaseConfigured } from "@/lib/config";
 import { slugify } from "@/lib/project-utils";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 interface RouteParams {
   params: { id: string };
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }
@@ -55,6 +59,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(_request: Request, { params }: RouteParams) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }

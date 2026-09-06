@@ -4,10 +4,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { isSupabaseConfigured } from "@/lib/config";
 import { validateRecurringSchedule } from "@/lib/recurring-period";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ tasks: [], tableMissing: false });
   }
@@ -34,6 +38,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();

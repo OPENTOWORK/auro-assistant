@@ -4,11 +4,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { isSupabaseConfigured } from "@/lib/config";
 import { validateRecurringSchedule } from "@/lib/recurring-period";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -69,6 +73,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }

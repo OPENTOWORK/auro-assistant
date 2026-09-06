@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchDashboardData } from "@/lib/api/dashboard-data";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 export const dynamic = "force-dynamic";
 import { isSupabaseConfigured } from "@/lib/config";
@@ -11,6 +12,9 @@ import {
 } from "@/lib/mock-data";
 
 export async function GET() {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   try {
     const data = await fetchDashboardData();
     return NextResponse.json(data);

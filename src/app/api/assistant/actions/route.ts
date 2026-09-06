@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { confirmAction, cancelAction } from "@/lib/assistant/actions";
 import { getPendingActions } from "@/lib/assistant/tools";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 export async function GET() {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   try {
     const actions = await getPendingActions();
     return NextResponse.json({ actions });
@@ -12,6 +16,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   let body: { actionId?: string; decision?: "confirm" | "cancel" };
   try {
     body = await request.json();

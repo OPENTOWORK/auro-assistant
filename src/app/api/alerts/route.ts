@@ -3,8 +3,12 @@ import { createAlertSchema } from "@/lib/validations";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { isSupabaseConfigured } from "@/lib/config";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 export async function GET() {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ alerts: [], tableMissing: false });
   }
@@ -29,6 +33,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();

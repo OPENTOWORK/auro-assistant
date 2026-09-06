@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/config";
+import { requireOwner } from "@/lib/auth/require-owner";
 
 export async function PATCH(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
+  const auth = await requireOwner();
+  if (!auth.ok) return auth.response;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
   }
