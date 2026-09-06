@@ -8,7 +8,9 @@ import {
   fallbackGetPendingActions,
   isMissingTableError,
 } from "@/lib/assistant/fallback-store";
-import type { PendingAction } from "@/types/assistant";
+import type { ActionType, PendingAction } from "@/types/assistant";
+import { parseProposedAction } from "@/lib/assistant/action-schemas";
+
 export async function runAssistantTool(
   name: string,
   args: Record<string, unknown>,
@@ -53,10 +55,19 @@ export async function runAssistantTool(
     case "get_user_memory":
       return { memory: await getConfirmedMemory() };
     case "propose_action": {
+      const parsed = parseProposedAction(args);
+      if (!parsed.ok) {
+        return {
+          proposed: false,
+          error: "invalid_action_payload",
+          details: parsed.details,
+        };
+      }
+
       const action = await createPendingAction({
-        action_type: String(args.action_type),
-        label: String(args.label),
-        payload: (args.payload as Record<string, unknown>) ?? {},
+        action_type: parsed.data.action_type,
+        label: parsed.data.label,
+        payload: { ...parsed.data.payload },
         conversation_id: conversationId,
       });
       return {
@@ -93,7 +104,7 @@ export async function getConfirmedMemory() {
 }
 
 export async function createPendingAction(input: {
-  action_type: string;
+  action_type: ActionType;
   label: string;
   payload: Record<string, unknown>;
   conversation_id?: string;

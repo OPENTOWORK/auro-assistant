@@ -82,7 +82,7 @@ export function fallbackSaveMessage(
 }
 
 export function fallbackCreatePendingAction(input: {
-  action_type: string;
+  action_type: PendingAction["action_type"];
   label: string;
   payload: Record<string, unknown>;
   conversation_id?: string;

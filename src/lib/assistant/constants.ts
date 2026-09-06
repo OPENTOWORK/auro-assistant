@@ -1,4 +1,5 @@
 import type { FunctionTool } from "openai/resources/responses/responses";
+import { ACTION_TYPES, type ActionType } from "@/lib/assistant/action-schemas";
 
 export const ASSISTANT_TOOLS: FunctionTool[] = [
   {
@@ -84,14 +85,9 @@ export const ASSISTANT_TOOLS: FunctionTool[] = [
       properties: {
         action_type: {
           type: "string",
-          enum: [
-            "create_task",
-            "update_task_status",
-            "create_calendar_event",
-            "prepare_email_reply",
-            "set_project_focus",
-            "save_memory",
-          ],
+          enum: [...ACTION_TYPES],
+          description:
+            "Tipo de acción. Solo estos valores: create_task, update_task_status, create_calendar_event, prepare_email_reply, set_project_focus, save_memory.",
         },
         label: {
           type: "string",
@@ -99,7 +95,47 @@ export const ASSISTANT_TOOLS: FunctionTool[] = [
         },
         payload: {
           type: "object",
-          description: "Datos necesarios para ejecutar la acción",
+          additionalProperties: false,
+          description:
+            "Datos de la acción. No incluir id, owner_key, status de creación, timestamps ni metadata. create_task: {title, description?, priority (low|medium|high|urgent), source (gmail|dralo|youtube|training|invoice|manual), project_id? UUID}. update_task_status: {task_id UUID, status (pending|in_progress|waiting_approval|done|rejected)}. create_calendar_event: {title, description?, start_at ISO, end_at ISO posterior a start_at, all_day?, calendar_name?, location?, project_id? UUID}. prepare_email_reply: {draft}. set_project_focus: {project_id? UUID, project_name?}. save_memory: {category (preferences|priorities|routines|instructions|identity|notes), key, value}.",
+          properties: {
+            title: { type: "string" },
+            description: { type: "string" },
+            priority: {
+              type: "string",
+              enum: ["low", "medium", "high", "urgent"],
+            },
+            source: {
+              type: "string",
+              enum: ["gmail", "dralo", "youtube", "training", "invoice", "manual"],
+            },
+            project_id: { type: "string" },
+            task_id: { type: "string" },
+            status: {
+              type: "string",
+              enum: ["pending", "in_progress", "waiting_approval", "done", "rejected"],
+            },
+            start_at: { type: "string" },
+            end_at: { type: "string" },
+            all_day: { type: "boolean" },
+            calendar_name: { type: "string" },
+            location: { type: "string" },
+            draft: { type: "string" },
+            project_name: { type: "string" },
+            category: {
+              type: "string",
+              enum: [
+                "preferences",
+                "priorities",
+                "routines",
+                "instructions",
+                "identity",
+                "notes",
+              ],
+            },
+            key: { type: "string" },
+            value: { type: "string" },
+          },
         },
       },
       required: ["action_type", "label", "payload"],
@@ -117,7 +153,7 @@ export const CHAT_SUGGESTIONS = [
   "Prepara mi día",
 ] as const;
 
-export const ACTION_LABELS: Record<string, string> = {
+export const ACTION_LABELS: Record<ActionType, string> = {
   create_task: "Crear tarea",
   update_task_status: "Actualizar tarea",
   create_calendar_event: "Crear evento",

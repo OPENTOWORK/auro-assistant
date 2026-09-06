@@ -1,3 +1,7 @@
+import type { ActionType } from "@/lib/assistant/action-schemas";
+
+export type { ActionType };
+
 export interface ChatMessage {
   id: string;
   conversation_id: string;
@@ -30,7 +34,7 @@ export interface PendingAction {
   id: string;
   owner_key: string;
   conversation_id: string | null;
-  action_type: string;
+  action_type: ActionType;
   label: string;
   payload: Record<string, unknown>;
   status: "pending" | "confirmed" | "cancelled" | "executed";

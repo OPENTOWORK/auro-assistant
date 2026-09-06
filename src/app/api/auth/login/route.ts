@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   }
 
   if (email !== ownerEmail) {
-    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    return NextResponse.json({ error: "Credenciales inválidas" }, { status: 401 });
   }
 
   const supabase = await createClient();

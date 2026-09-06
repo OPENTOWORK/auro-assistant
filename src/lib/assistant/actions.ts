@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
+import { isSupabaseConfigured } from "@/lib/config";
+import {
+  parseProposedAction,
+  type ProposedAction,
+} from "@/lib/assistant/action-schemas";
 import {
   fallbackCancelAction,
   fallbackConfirmAction,
@@ -9,14 +14,18 @@ import {
 } from "@/lib/assistant/fallback-store";
 import type { PendingAction } from "@/types/assistant";
 
+function persistFailedMessage() {
+  return "No se pudo persistir la acción.";
+}
+
 async function upsertMemory(input: {
   category: string;
   memory_key: string;
   value: string;
-}) {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+}): Promise<{ ok: boolean; message?: string }> {
+  if (!isSupabaseConfigured()) {
     fallbackUpsertMemory(input);
-    return;
+    return { ok: true };
   }
 
   const admin = createAdminClient();
@@ -33,106 +42,137 @@ async function upsertMemory(input: {
   );
 
   if (error) {
-    if (isMissingTableError(error)) {
-      fallbackUpsertMemory(input);
-      return;
-    }
-    throw error;
+    return { ok: false, message: persistFailedMessage() };
   }
+  return { ok: true };
+}
+
+function validatedAction(action: PendingAction): ProposedAction | null {
+  const parsed = parseProposedAction({
+    action_type: action.action_type,
+    label: action.label || action.action_type,
+    payload: action.payload,
+  });
+  return parsed.ok ? parsed.data : null;
 }
 
 export async function executePendingAction(
   action: PendingAction
 ): Promise<{ ok: boolean; message: string }> {
-  const admin = createAdminClient();
-  const payload = action.payload;
+  const parsed = validatedAction(action);
+  if (!parsed) {
+    return { ok: false, message: "Payload de acción inválido." };
+  }
 
-  switch (action.action_type) {
+  switch (parsed.action_type) {
     case "create_task": {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, message: persistFailedMessage() };
+      }
+      const admin = createAdminClient();
       const { error } = await admin.from("tasks").insert({
-        title: String(payload.title ?? "Nueva tarea"),
-        description: payload.description ? String(payload.description) : null,
-        priority: (payload.priority as string) ?? "medium",
-        source: (payload.source as string) ?? "manual",
+        title: parsed.payload.title,
+        description: parsed.payload.description ?? null,
+        priority: parsed.payload.priority,
+        source: parsed.payload.source,
         status: "pending",
-        project_id: payload.project_id ? String(payload.project_id) : null,
+        owner_key: AURO_OWNER_KEY,
+        project_id: parsed.payload.project_id ?? null,
       });
       if (error) {
-        if (isMissingTableError(error)) {
-          return {
-            ok: true,
-            message:
-              "Tarea registrada localmente. Ejecuta la migración SQL para persistirla en Supabase.",
-          };
-        }
-        throw error;
+        return { ok: false, message: persistFailedMessage() };
       }
       return { ok: true, message: "Tarea creada correctamente." };
     }
     case "update_task_status": {
-      const { error } = await admin
+      if (!isSupabaseConfigured()) {
+        return { ok: false, message: persistFailedMessage() };
+      }
+      const admin = createAdminClient();
+      const { data, error } = await admin
         .from("tasks")
-        .update({ status: String(payload.status ?? "done") })
-        .eq("id", String(payload.task_id));
-      if (error) throw error;
+        .update({ status: parsed.payload.status })
+        .eq("id", parsed.payload.task_id)
+        .eq("owner_key", AURO_OWNER_KEY)
+        .select("id")
+        .maybeSingle();
+      if (error) {
+        return { ok: false, message: persistFailedMessage() };
+      }
+      if (!data) {
+        return { ok: false, message: "Tarea no encontrada" };
+      }
       return { ok: true, message: "Estado de la tarea actualizado." };
     }
     case "create_calendar_event": {
+      if (!isSupabaseConfigured()) {
+        return { ok: false, message: persistFailedMessage() };
+      }
+      const admin = createAdminClient();
       const { error } = await admin.from("calendar_events").insert({
-        title: String(payload.title ?? "Evento"),
-        description: payload.description ? String(payload.description) : null,
-        start_at: String(payload.start_at),
-        end_at: String(payload.end_at),
-        all_day: Boolean(payload.all_day ?? false),
-        calendar_name: String(payload.calendar_name ?? "Principal"),
-        location: payload.location ? String(payload.location) : null,
+        title: parsed.payload.title,
+        description: parsed.payload.description ?? null,
+        start_at: parsed.payload.start_at,
+        end_at: parsed.payload.end_at,
+        all_day: parsed.payload.all_day,
+        calendar_name: parsed.payload.calendar_name,
+        location: parsed.payload.location ?? null,
+        project_id: parsed.payload.project_id ?? null,
+        owner_key: AURO_OWNER_KEY,
       });
       if (error) {
-        if (isMissingTableError(error)) {
-          return {
-            ok: true,
-            message:
-              "Evento preparado. Ejecuta la migración SQL del calendario para guardarlo.",
-          };
-        }
-        throw error;
+        return { ok: false, message: persistFailedMessage() };
       }
       return { ok: true, message: "Evento creado en el calendario." };
     }
     case "prepare_email_reply": {
       return {
         ok: true,
-        message: `Borrador preparado: ${String(payload.draft ?? payload.body ?? "")}`,
+        message: `Borrador preparado: ${parsed.payload.draft}`,
       };
     }
     case "set_project_focus": {
-      await upsertMemory({
+      const value =
+        parsed.payload.project_name ?? parsed.payload.project_id ?? "";
+      const saved = await upsertMemory({
         category: "priorities",
         memory_key: "current_focus",
-        value: String(payload.project_name ?? payload.project_id ?? ""),
+        value,
       });
+      if (!saved.ok) {
+        return { ok: false, message: saved.message ?? persistFailedMessage() };
+      }
       return {
         ok: true,
-        message: `Foco actualizado a ${payload.project_name ?? payload.project_id}.`,
+        message: `Foco actualizado a ${value}.`,
       };
     }
     case "save_memory": {
-      await upsertMemory({
-        category: String(payload.category ?? "preferences"),
-        memory_key: String(payload.key ?? "note"),
-        value: String(payload.value ?? ""),
+      const saved = await upsertMemory({
+        category: parsed.payload.category,
+        memory_key: parsed.payload.key,
+        value: parsed.payload.value,
       });
+      if (!saved.ok) {
+        return { ok: false, message: saved.message ?? persistFailedMessage() };
+      }
       return { ok: true, message: "Memoria guardada." };
     }
     default:
-      return { ok: false, message: `Acción no soportada: ${action.action_type}` };
+      return { ok: false, message: "Acción no soportada." };
   }
 }
 
 export async function confirmAction(actionId: string) {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    const action = fallbackConfirmAction(actionId);
+  if (!isSupabaseConfigured()) {
+    const action = fallbackGetPendingActions().find((item) => item.id === actionId);
+    if (!action) {
+      throw new Error("Acción no encontrada o ya procesada");
+    }
     const result = await executePendingAction(action);
+    if (result.ok) {
+      fallbackConfirmAction(actionId);
+    }
     return result;
   }
 
@@ -148,13 +188,15 @@ export async function confirmAction(actionId: string) {
   if (error || !action) {
     if (error && isMissingTableError(error)) {
       const fallbackAction = fallbackGetPendingActions().find(
-        (a) => a.id === actionId
+        (item) => item.id === actionId
       );
       if (!fallbackAction) {
         throw new Error("Acción no encontrada o ya procesada");
       }
       const result = await executePendingAction(fallbackAction);
-      fallbackConfirmAction(actionId);
+      if (result.ok) {
+        fallbackConfirmAction(actionId);
+      }
       return result;
     }
     throw new Error("Acción no encontrada o ya procesada");
@@ -162,25 +204,29 @@ export async function confirmAction(actionId: string) {
 
   const result = await executePendingAction(action as PendingAction);
 
+  if (!result.ok) {
+    return result;
+  }
+
   const { error: updateError } = await admin
     .from("pending_actions")
     .update({
       status: "executed",
       executed_at: new Date().toISOString(),
     })
-    .eq("id", actionId);
+    .eq("id", actionId)
+    .eq("owner_key", AURO_OWNER_KEY)
+    .eq("status", "pending");
 
-  if (updateError && isMissingTableError(updateError)) {
-    fallbackConfirmAction(actionId);
-  } else if (updateError) {
-    throw updateError;
+  if (updateError) {
+    return { ok: false, message: persistFailedMessage() };
   }
 
   return result;
 }
 
 export async function cancelAction(actionId: string) {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!isSupabaseConfigured()) {
     fallbackCancelAction(actionId);
     return { ok: true };
   }

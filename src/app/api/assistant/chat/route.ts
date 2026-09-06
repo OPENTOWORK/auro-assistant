@@ -18,6 +18,7 @@ import {
   runAssistantTool,
 } from "@/lib/assistant/tools";
 import { requireOwner } from "@/lib/auth/require-owner";
+import { chatMessageRequestSchema } from "@/lib/assistant/action-schemas";
 
 export async function GET(request: Request) {
   const auth = await requireOwner();
@@ -58,20 +59,22 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { message?: string; conversationId?: string };
+  let raw: unknown;
   try {
-    body = await request.json();
+    raw = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const message = body.message?.trim();
-  if (!message) {
-    return NextResponse.json({ error: "Mensaje vacío" }, { status: 400 });
+  const parsedBody = chatMessageRequestSchema.safeParse(raw);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "Mensaje inválido" }, { status: 400 });
   }
 
+  const { message, conversationId: requestedConversationId } = parsedBody.data;
+
   try {
-    const conversationId = await getOrCreateConversation(body.conversationId);
+    const conversationId = await getOrCreateConversation(requestedConversationId);
     await saveMessage(conversationId, "user", message);
 
     const history = await loadMessages(conversationId, 30);
