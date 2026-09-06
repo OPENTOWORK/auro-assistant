@@ -12,6 +12,7 @@ import {
   fallbackReleaseClaim,
   fallbackUpsertMemory,
 } from "@/lib/assistant/fallback-store";
+import { createTask, updateTaskStatus } from "@/lib/repositories/tasks";
 import type { PendingAction } from "@/types/assistant";
 
 export class ActionConflictError extends Error {
@@ -86,17 +87,16 @@ export async function executePendingAction(
       if (!isSupabaseConfigured()) {
         return { ok: false, message: persistFailedMessage() };
       }
-      const admin = createAdminClient();
-      const { error } = await admin.from("tasks").insert({
-        title: parsed.payload.title,
-        description: parsed.payload.description ?? null,
-        priority: parsed.payload.priority,
-        source: parsed.payload.source,
-        status: "pending",
-        owner_key: AURO_OWNER_KEY,
-        project_id: parsed.payload.project_id ?? null,
-      });
-      if (error) {
+      try {
+        await createTask({
+          title: parsed.payload.title,
+          description: parsed.payload.description ?? null,
+          priority: parsed.payload.priority,
+          source: parsed.payload.source,
+          status: "pending",
+          project_id: parsed.payload.project_id ?? null,
+        });
+      } catch {
         return { ok: false, message: persistFailedMessage() };
       }
       return { ok: true, message: "Tarea creada correctamente." };
@@ -105,19 +105,16 @@ export async function executePendingAction(
       if (!isSupabaseConfigured()) {
         return { ok: false, message: persistFailedMessage() };
       }
-      const admin = createAdminClient();
-      const { data, error } = await admin
-        .from("tasks")
-        .update({ status: parsed.payload.status })
-        .eq("id", parsed.payload.task_id)
-        .eq("owner_key", AURO_OWNER_KEY)
-        .select("id")
-        .maybeSingle();
-      if (error) {
+      try {
+        const updated = await updateTaskStatus(
+          parsed.payload.task_id,
+          parsed.payload.status
+        );
+        if (!updated) {
+          return { ok: false, message: "Tarea no encontrada" };
+        }
+      } catch {
         return { ok: false, message: persistFailedMessage() };
-      }
-      if (!data) {
-        return { ok: false, message: "Tarea no encontrada" };
       }
       return { ok: true, message: "Estado de la tarea actualizado." };
     }

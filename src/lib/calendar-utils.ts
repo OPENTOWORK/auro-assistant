@@ -162,6 +162,19 @@ export function eventAccentClass(event: CalendarEvent): string {
   return "bg-blue-500/20 text-blue-200 border-blue-500/30";
 }
 
+export function getUpcomingCalendarEvents(
+  events: CalendarEvent[],
+  limit = 7
+): CalendarEvent[] {
+  const now = new Date();
+  return [...events]
+    .filter((e) => new Date(e.end_at) >= now)
+    .sort(
+      (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
+    )
+    .slice(0, limit);
+}
+
 export function navigateDate(
   date: Date,
   mode: CalendarViewMode,

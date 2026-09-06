@@ -6,24 +6,19 @@ import { Card } from "@/components/ui/Card";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { ProjectLabel } from "@/components/ui/AppIcon";
 import { DemoBanner } from "@/components/layout/DemoBanner";
+import { isSupabaseConfigured } from "@/lib/config";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useProjects } from "@/components/projects/ProjectsProvider";
-import { countTasksByProject } from "@/lib/mock-data";
+import { countTasksByProject } from "@/lib/task-utils";
 import { sortProjectsByPriority } from "@/lib/project-utils";
 import { formatRelativeTime } from "@/lib/utils";
 
 export function DashboardView() {
   const { projects, getById, isLive: projectsLive } = useProjects();
-  const {
-    emails,
-    leads,
-    tasks,
-    calendarEvents,
-    isLive,
-  } = useDashboardData();
+  const { emails, leads, tasks, calendarEvents } = useDashboardData();
 
   const allProjects = sortProjectsByPriority(projects);
-  const showDemo = !isLive && !projectsLive;
+  const showDemo = !isSupabaseConfigured();
 
   return (
     <div className="space-y-4">
@@ -45,8 +40,7 @@ export function DashboardView() {
             day: "numeric",
             month: "long",
           })}
-          {" · "}Foco en{" "}
-          <span className="text-auro-accent font-medium">Dralo</span>
+          {allProjects.length === 0 ? " · No hay proyectos todavía" : null}
         </p>
       </section>
 
@@ -55,16 +49,20 @@ export function DashboardView() {
         count={allProjects.length}
         href="/proyectos"
       >
-        <div className="space-y-2">
-          {allProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              taskCount={countTasksByProject(project.id, tasks)}
-              compact
-            />
-          ))}
-        </div>
+        {allProjects.length === 0 ? (
+          <p className="text-sm text-auro-muted py-2">No hay proyectos todavía</p>
+        ) : (
+          <div className="space-y-2">
+            {allProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                taskCount={countTasksByProject(project.id, tasks)}
+                compact
+              />
+            ))}
+          </div>
+        )}
       </CollapsibleSection>
 
       <CollapsibleSection title="Gmails destacados" count={emails.length}>

@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { updateTaskStatus } from "@/lib/repositories/tasks";
 import {
   n8nApprovalResultSchema,
   validateWebhookSecret,
 } from "@/lib/validations";
+import { isSupabaseConfigured } from "@/lib/config";
 
 export async function POST(request: Request) {
   if (!validateWebhookSecret(request, process.env.N8N_WEBHOOK_SECRET)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
   }
 
   let body: unknown;
@@ -40,10 +49,7 @@ export async function POST(request: Request) {
     if (approvalError) throw approvalError;
 
     const taskStatus = status === "approved" ? "in_progress" : "rejected";
-    await supabase
-      .from("tasks")
-      .update({ status: taskStatus })
-      .eq("id", approval.task_id);
+    await updateTaskStatus(approval.task_id, taskStatus);
 
     return NextResponse.json({ success: true, approval_id, status });
   } catch (err) {

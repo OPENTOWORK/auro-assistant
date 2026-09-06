@@ -1,32 +1,37 @@
 import { NextResponse } from "next/server";
 import { createRecurringTaskSchema } from "@/lib/validations";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isMissingTableError } from "@/lib/supabase/errors";
 import { isSupabaseConfigured } from "@/lib/config";
 import { validateRecurringSchedule } from "@/lib/recurring-period";
 import { requireOwner } from "@/lib/auth/require-owner";
+import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 
 export const dynamic = "force-dynamic";
+
+const RECURRING_COLUMNS =
+  "id, title, description, frequency, schedule_day, project_id, is_active, created_at";
 
 export async function GET() {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ tasks: [], tableMissing: false });
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
   }
 
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("recurring_tasks")
-    .select("*")
+    .select(RECURRING_COLUMNS)
+    .eq("owner_key", AURO_OWNER_KEY)
     .eq("is_active", true)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(100);
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return NextResponse.json({ tasks: [], tableMissing: true });
-    }
     console.error("[api/recurring-tasks GET]", error);
     return NextResponse.json(
       { error: "Error al cargar tareas recurrentes" },
@@ -34,12 +39,19 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ tasks: data ?? [], tableMissing: false });
+  return NextResponse.json({ tasks: data ?? [] });
 }
 
 export async function POST(request: Request) {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
+  }
 
   let body: unknown;
   try {
@@ -50,14 +62,7 @@ export async function POST(request: Request) {
 
   const parsed = createRecurringTaskSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Datos inválidos", details: parsed.error.flatten() },
-      { status: 400 }
-    );
-  }
-
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
+    return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
   const { title, description, frequency, schedule_day, project_id } = parsed.data;
@@ -71,6 +76,7 @@ export async function POST(request: Request) {
   const { data, error } = await admin
     .from("recurring_tasks")
     .insert({
+      owner_key: AURO_OWNER_KEY,
       title,
       description: description ?? null,
       frequency,
@@ -78,19 +84,10 @@ export async function POST(request: Request) {
       project_id: project_id ?? null,
       is_active: true,
     })
-    .select()
+    .select(RECURRING_COLUMNS)
     .single();
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return NextResponse.json(
-        {
-          error: "La tabla recurring_tasks no existe. Ejecuta npm run db:migrate",
-          tableMissing: true,
-        },
-        { status: 503 }
-      );
-    }
     console.error("[api/recurring-tasks POST]", error);
     return NextResponse.json(
       { error: "Error al crear la tarea recurrente" },

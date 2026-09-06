@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createTask } from "@/lib/repositories/tasks";
 import {
   n8nTaskCreatedSchema,
   validateWebhookSecret,
 } from "@/lib/validations";
+import { isSupabaseConfigured } from "@/lib/config";
 
 export async function POST(request: Request) {
   if (!validateWebhookSecret(request, process.env.N8N_WEBHOOK_SECRET)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
   }
 
   let body: unknown;
@@ -19,23 +27,12 @@ export async function POST(request: Request) {
 
   const parsed = n8nTaskCreatedSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Payload inválido", details: parsed.error.flatten() },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
   }
 
   try {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert(parsed.data)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    return NextResponse.json({ success: true, task: data }, { status: 201 });
+    const task = await createTask(parsed.data);
+    return NextResponse.json({ success: true, task }, { status: 201 });
   } catch (err) {
     console.error("[webhook/task-created]", err);
     return NextResponse.json(

@@ -8,17 +8,14 @@ import { Card } from "@/components/ui/Card";
 import { AppIcon, ProjectLabel } from "@/components/ui/AppIcon";
 import { DemoBanner } from "@/components/layout/DemoBanner";
 import {
-  APPROVAL_ACTION_LABELS,
   PRIORITY_COLORS,
   STATUS_COLORS,
   TASK_PRIORITY_LABELS,
   TASK_SOURCE_LABELS,
   TASK_STATUS_LABELS,
 } from "@/lib/constants";
-import { isSupabaseConfigured } from "@/lib/config";
 import { SOURCE_ICON_NAMES } from "@/lib/icons";
-import { getLocalTasks } from "@/lib/local-tasks";
-import { getMockApprovalForTask, getMockTask, MOCK_TASKS } from "@/lib/mock-data";
+import { isSupabaseConfigured } from "@/lib/config";
 import { useProjects } from "@/components/projects/ProjectsProvider";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Task } from "@/types/database";
@@ -35,21 +32,16 @@ export function TaskDetailView({ taskId }: TaskDetailViewProps) {
 
   useEffect(() => {
     async function load() {
-      if (isSupabaseConfigured()) {
-        try {
-          const res = await fetch("/api/tasks");
-          if (res.ok) {
-            const { tasks } = await res.json();
-            const found = (tasks as Task[]).find((t) => t.id === taskId);
-            setTask(found ?? null);
-          }
-        } catch {
+      try {
+        const res = await fetch(`/api/tasks/${taskId}`);
+        if (res.ok) {
+          const json = await res.json();
+          setTask(json.task ?? null);
+        } else {
           setTask(null);
         }
-      } else {
-        const local = getLocalTasks();
-        const all = [...local, ...MOCK_TASKS];
-        setTask(all.find((t) => t.id === taskId) ?? getMockTask(taskId) ?? null);
+      } catch {
+        setTask(null);
       }
       setLoading(false);
     }
@@ -71,7 +63,6 @@ export function TaskDetailView({ taskId }: TaskDetailViewProps) {
     );
   }
 
-  const approval = getMockApprovalForTask(task.id);
   const project = task.project_id ? getById(task.project_id) : null;
 
   return (
@@ -157,37 +148,7 @@ export function TaskDetailView({ taskId }: TaskDetailViewProps) {
         </Card>
       )}
 
-      {approval && (
-        <Card className="border-amber-500/20 bg-amber-500/5 space-y-3">
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-400 mb-1">
-              Propuesta pendiente de aprobación
-            </h3>
-            <p className="text-sm text-auro-text">
-              {APPROVAL_ACTION_LABELS[approval.action_type]}
-            </p>
-          </div>
-          <pre className="rounded-lg bg-auro-bg border border-auro-border p-3 text-xs font-mono text-auro-muted overflow-x-auto">
-            {JSON.stringify(approval.proposed_payload, null, 2)}
-          </pre>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="primary" className="flex-1">
-              <AppIcon name="check" className="h-3.5 w-3.5 mr-1.5" />
-              Aprobar
-            </Button>
-            <Button variant="danger" className="flex-1">
-              <AppIcon name="x" className="h-3.5 w-3.5 mr-1.5" />
-              Rechazar
-            </Button>
-            <Button variant="secondary" className="flex-1">
-              <AppIcon name="pencil" className="h-3.5 w-3.5 mr-1.5" />
-              Editar
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {!approval && task.status !== "done" && (
+      {task.status !== "done" && (
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button variant="primary" className="flex-1">
             Marcar como completada

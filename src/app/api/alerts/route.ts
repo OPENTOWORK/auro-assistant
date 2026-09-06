@@ -1,40 +1,51 @@
 import { NextResponse } from "next/server";
 import { createAlertSchema } from "@/lib/validations";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isMissingTableError } from "@/lib/supabase/errors";
 import { isSupabaseConfigured } from "@/lib/config";
 import { requireOwner } from "@/lib/auth/require-owner";
+import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
+
+const ALERT_COLUMNS =
+  "id, title, message, severity, is_read, source, project_id, created_at";
 
 export async function GET() {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ alerts: [], tableMissing: false });
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
   }
 
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("alerts")
-    .select("*")
+    .select(ALERT_COLUMNS)
+    .eq("owner_key", AURO_OWNER_KEY)
     .eq("is_read", false)
     .order("created_at", { ascending: false })
     .limit(50);
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return NextResponse.json({ alerts: [], tableMissing: true });
-    }
     console.error("[api/alerts GET]", error);
     return NextResponse.json({ error: "Error al cargar alertas" }, { status: 500 });
   }
 
-  return NextResponse.json({ alerts: data ?? [], tableMissing: false });
+  return NextResponse.json({ alerts: data ?? [] });
 }
 
 export async function POST(request: Request) {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
+  }
 
   let body: unknown;
   try {
@@ -45,14 +56,7 @@ export async function POST(request: Request) {
 
   const parsed = createAlertSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Datos inválidos", details: parsed.error.flatten() },
-      { status: 400 }
-    );
-  }
-
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: "Supabase no configurado" }, { status: 503 });
+    return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
   const { title, message, severity, source, project_id } = parsed.data;
@@ -61,6 +65,7 @@ export async function POST(request: Request) {
   const { data, error } = await admin
     .from("alerts")
     .insert({
+      owner_key: AURO_OWNER_KEY,
       title,
       message: message ?? null,
       severity,
@@ -68,16 +73,10 @@ export async function POST(request: Request) {
       project_id: project_id ?? null,
       is_read: false,
     })
-    .select()
+    .select(ALERT_COLUMNS)
     .single();
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return NextResponse.json(
-        { error: "La tabla alerts no existe en Supabase.", tableMissing: true },
-        { status: 503 }
-      );
-    }
     console.error("[api/alerts POST]", error);
     return NextResponse.json({ error: "Error al crear la alerta" }, { status: 500 });
   }

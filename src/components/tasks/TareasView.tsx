@@ -9,8 +9,6 @@ import { NewTaskForm } from "@/components/tasks/NewTaskForm";
 import { Button } from "@/components/ui/Button";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { useDashboardData } from "@/hooks/useDashboardData";
-import { isSupabaseConfigured } from "@/lib/config";
-import { getLocalTasks } from "@/lib/local-tasks";
 import type { Alert, RecurringTask, Task } from "@/types/database";
 import type { CreatedItem } from "@/components/tasks/NewTaskForm";
 
@@ -22,59 +20,48 @@ export function TareasView() {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showAlertForm, setShowAlertForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tableMissing, setTableMissing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [recurringTasksLocal, setRecurringTasksLocal] = useState<RecurringTask[]>([]);
 
   const allRecurring =
     recurringTasksLocal.length > 0 ? recurringTasksLocal : recurringTasks;
 
   const loadData = useCallback(async () => {
-    setTableMissing(false);
+    setLoadError(null);
 
-    if (isSupabaseConfigured()) {
-      try {
-        const [tasksRes, alertsRes, recurringRes] = await Promise.all([
-          fetch("/api/tasks"),
-          fetch("/api/alerts"),
-          fetch("/api/recurring-tasks"),
-        ]);
-        const tasksJson = await tasksRes.json();
-        const alertsJson = await alertsRes.json();
-        const recurringJson = await recurringRes.json();
+    try {
+      const [tasksRes, alertsRes, recurringRes] = await Promise.all([
+        fetch("/api/tasks"),
+        fetch("/api/alerts"),
+        fetch("/api/recurring-tasks"),
+      ]);
+      const tasksJson = await tasksRes.json();
+      const alertsJson = await alertsRes.json();
+      const recurringJson = await recurringRes.json();
 
-        if (tasksRes.ok) {
-          setTasks(tasksJson.tasks ?? []);
-          setTableMissing(Boolean(tasksJson.tableMissing));
-        } else {
-          setTasks([]);
-        }
-
-        if (alertsRes.ok) {
-          setAlerts(alertsJson.alerts ?? []);
-          setTableMissing(
-            (prev) => prev || Boolean(alertsJson.tableMissing)
-          );
-        } else {
-          setAlerts([]);
-        }
-
-        if (recurringRes.ok) {
-          setRecurringTasksLocal(recurringJson.tasks ?? []);
-          setTableMissing(
-            (prev) => prev || Boolean(recurringJson.tableMissing)
-          );
-        } else {
-          setRecurringTasksLocal([]);
-        }
-      } catch {
+      if (tasksRes.ok) {
+        setTasks(tasksJson.tasks ?? []);
+      } else {
         setTasks([]);
+        setLoadError("No se pudieron cargar las tareas");
+      }
+
+      if (alertsRes.ok) {
+        setAlerts(alertsJson.alerts ?? []);
+      } else {
         setAlerts([]);
+      }
+
+      if (recurringRes.ok) {
+        setRecurringTasksLocal(recurringJson.tasks ?? []);
+      } else {
         setRecurringTasksLocal([]);
       }
-    } else {
-      setTasks(getLocalTasks());
+    } catch {
+      setTasks([]);
       setAlerts([]);
       setRecurringTasksLocal([]);
+      setLoadError("No se pudieron cargar las tareas");
     }
     setLoading(false);
   }, []);
@@ -92,7 +79,7 @@ export function TareasView() {
       setRecurringTasksLocal((prev) => [...prev, result.item]);
     }
     setShowTaskForm(false);
-    setTableMissing(false);
+    setLoadError(null);
     refresh();
   }
 
@@ -148,11 +135,9 @@ export function TareasView() {
         </div>
       </div>
 
-      {tableMissing && (
-        <p className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-          Faltan tablas en Supabase. Ejecuta{" "}
-          <code className="text-amber-200">npm run db:migrate</code> desde la
-          raíz del proyecto.
+      {loadError && (
+        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          {loadError}
         </p>
       )}
 
@@ -206,7 +191,7 @@ export function TareasView() {
           tasks.map((task) => <TaskCard key={task.id} task={task} />)
         ) : (
           <p className="text-sm text-auro-muted py-2">
-            Sin tareas pendientes. Usa &quot;+ Nueva&quot; para crear una.
+            No hay tareas pendientes. Usa &quot;+ Nueva&quot; para crear una.
           </p>
         )}
       </CollapsibleSection>

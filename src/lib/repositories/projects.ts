@@ -1,22 +1,16 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isUniqueViolation } from "@/lib/supabase/errors";
 import { sortProjectsByPriority } from "@/lib/project-utils";
+import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 import type { Project, ProjectStatus, ProjectType } from "@/types/database";
 
 /**
- * Repositorio de proyectos.
- *
- * Es la única puerta de acceso a la tabla `projects`. Sustituye a
- * `lib/supabase/proyectos.ts`, que leía de una tabla `Proyectos` con solo
- * (id, name, description) y reconstruía el resto de metadatos en runtime
- * por coincidencia difusa de nombres contra una constante del código.
- * Ahora todos los campos se persisten y el mapeo es directo.
+ * Repositorio de proyectos. owner_key lo decide el servidor.
  */
 
 const COLUMNS =
   "id, slug, name, description, type, status, priority, icon, color, url, created_at";
 
-/** Límite por defecto. Ninguna consulta debe ser ilimitada. */
 const DEFAULT_LIMIT = 200;
 
 interface ProjectRow {
@@ -63,6 +57,7 @@ function mapRow(row: ProjectRow): Project {
 
 function toRow(input: ProjectInput) {
   return {
+    owner_key: AURO_OWNER_KEY,
     slug: input.slug.trim(),
     name: input.name.trim(),
     description: input.description?.trim() || null,
@@ -88,6 +83,7 @@ export async function listProjects(limit = DEFAULT_LIMIT): Promise<Project[]> {
   const { data, error } = await admin
     .from("projects")
     .select(COLUMNS)
+    .eq("owner_key", AURO_OWNER_KEY)
     .order("priority", { ascending: true })
     .limit(limit);
 
@@ -103,6 +99,7 @@ export async function getProjectById(id: string): Promise<Project | null> {
     .from("projects")
     .select(COLUMNS)
     .eq("id", id)
+    .eq("owner_key", AURO_OWNER_KEY)
     .maybeSingle();
 
   if (error) throw error;
@@ -136,6 +133,7 @@ export async function updateProject(
     .from("projects")
     .update(toRow(input))
     .eq("id", id)
+    .eq("owner_key", AURO_OWNER_KEY)
     .select(COLUMNS)
     .maybeSingle();
 
@@ -155,7 +153,13 @@ export async function updateProject(
 export async function deleteProject(id: string): Promise<boolean> {
   const admin = createAdminClient();
 
-  const { error } = await admin.from("projects").delete().eq("id", id);
+  const { data, error } = await admin
+    .from("projects")
+    .delete()
+    .eq("id", id)
+    .eq("owner_key", AURO_OWNER_KEY)
+    .select("id");
+
   if (error) throw error;
-  return true;
+  return (data?.length ?? 0) > 0;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { ProjectForm } from "@/components/projects/ProjectForm";
 import { useProjects } from "@/components/projects/ProjectsProvider";
@@ -8,15 +8,41 @@ import { Button } from "@/components/ui/Button";
 import { AppIcon } from "@/components/ui/AppIcon";
 import { DemoBanner } from "@/components/layout/DemoBanner";
 import { isSupabaseConfigured } from "@/lib/config";
-import { countTasksByProject, MOCK_TASKS } from "@/lib/mock-data";
-import type { Project } from "@/types/database";
+import { countTasksByProject } from "@/lib/task-utils";
+import type { Project, Task } from "@/types/database";
 
 export function ProyectosView() {
-  const { projects, loading, isLive, addProject, updateProject, deleteProject } =
-    useProjects();
-  const showDemo = !isSupabaseConfigured() && !isLive;
+  const {
+    projects,
+    loading,
+    error,
+    refresh,
+    addProject,
+    updateProject,
+    deleteProject,
+  } = useProjects();
+  const showDemo = !isSupabaseConfigured();
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/tasks")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && Array.isArray(json.tasks)) {
+          setTasks(json.tasks);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTasks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projects.length]);
 
   const activeCount = projects.filter((p) => p.status !== "paused").length;
   const nextPriority =
@@ -55,6 +81,15 @@ export function ProyectosView() {
         )}
       </div>
 
+      {error && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+          <p className="text-xs text-red-400">{error}</p>
+          <Button size="sm" variant="ghost" onClick={() => refresh()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
       {showForm && (
         <ProjectForm
           nextPriority={nextPriority}
@@ -77,39 +112,45 @@ export function ProyectosView() {
         />
       )}
 
-      <div className="space-y-3">
-        {projects.map((project) => (
-          <div key={project.id} className="flex items-stretch gap-2">
-            <div className="flex-1 min-w-0">
-              <ProjectCard
-                project={project}
-                taskCount={countTasksByProject(project.id, MOCK_TASKS)}
-              />
+      {!loading && projects.length === 0 ? (
+        <p className="text-sm text-auro-muted text-center py-8 rounded-xl border border-dashed border-auro-border">
+          No hay proyectos todavía
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {projects.map((project) => (
+            <div key={project.id} className="flex items-stretch gap-2">
+              <div className="flex-1 min-w-0">
+                <ProjectCard
+                  project={project}
+                  taskCount={countTasksByProject(project.id, tasks)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 shrink-0">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditing(project);
+                  }}
+                  aria-label={`Editar ${project.name}`}
+                >
+                  <AppIcon name="pencil" className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => handleDelete(project)}
+                  aria-label={`Eliminar ${project.name}`}
+                >
+                  <AppIcon name="trash" className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5 shrink-0">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditing(project);
-                }}
-                aria-label={`Editar ${project.name}`}
-              >
-                <AppIcon name="pencil" className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => handleDelete(project)}
-                aria-label={`Eliminar ${project.name}`}
-              >
-                <AppIcon name="trash" className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

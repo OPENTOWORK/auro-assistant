@@ -1,16 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { isSupabaseConfigured } from "@/lib/config";
-import {
-  MOCK_CALENDAR_EVENTS,
-  MOCK_EMAILS,
-  MOCK_LEADS,
-  MOCK_RECURRING_TASKS,
-  MOCK_TASKS,
-  MOCK_ALERTS,
-  getUpcomingCalendarEvents,
-} from "@/lib/mock-data";
 import type {
   Alert,
   CalendarEvent,
@@ -34,14 +24,18 @@ interface DashboardData {
   refresh: () => Promise<void>;
 }
 
+const EMPTY = {
+  alerts: [] as Alert[],
+  emails: [] as ImportantEmail[],
+  leads: [] as Lead[],
+  tasks: [] as Task[],
+  calendarEvents: [] as CalendarEvent[],
+  recurringTasks: [] as RecurringTask[],
+};
+
 export function useDashboardData(): DashboardData {
   const [data, setData] = useState<Omit<DashboardData, "refresh">>({
-    alerts: [],
-    emails: [],
-    leads: [],
-    tasks: [],
-    calendarEvents: [],
-    recurringTasks: [],
+    ...EMPTY,
     loading: true,
     isLive: false,
     partial: false,
@@ -50,22 +44,6 @@ export function useDashboardData(): DashboardData {
 
   const load = useCallback(async () => {
     setData((prev) => ({ ...prev, loading: true, error: null }));
-
-    if (!isSupabaseConfigured()) {
-      setData({
-        alerts: MOCK_ALERTS,
-        emails: MOCK_EMAILS,
-        leads: MOCK_LEADS,
-        tasks: MOCK_TASKS,
-        calendarEvents: getUpcomingCalendarEvents(MOCK_CALENDAR_EVENTS),
-        recurringTasks: MOCK_RECURRING_TASKS.filter((t) => t.is_active),
-        loading: false,
-        isLive: false,
-        partial: false,
-        error: null,
-      });
-      return;
-    }
 
     try {
       const res = await fetch("/api/dashboard", { cache: "no-store" });
@@ -87,14 +65,9 @@ export function useDashboardData(): DashboardData {
       });
     } catch {
       setData({
-        alerts: [],
-        emails: [],
-        leads: [],
-        tasks: [],
-        calendarEvents: getUpcomingCalendarEvents(MOCK_CALENDAR_EVENTS),
-        recurringTasks: [],
+        ...EMPTY,
         loading: false,
-        isLive: isSupabaseConfigured(),
+        isLive: false,
         partial: true,
         error: "No se pudieron cargar los datos",
       });

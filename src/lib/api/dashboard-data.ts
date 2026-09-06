@@ -1,14 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isMissingTableError } from "@/lib/supabase/errors";
-import {
-  MOCK_CALENDAR_EVENTS,
-  MOCK_EMAILS,
-  MOCK_LEADS,
-  MOCK_RECURRING_TASKS,
-  getUpcomingCalendarEvents,
-} from "@/lib/mock-data";
 import { isSupabaseConfigured } from "@/lib/config";
 import { mergeCalendarWithRecurring } from "@/lib/recurring-to-calendar";
+import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 import type {
   Alert,
   CalendarEvent,
@@ -17,16 +10,6 @@ import type {
   RecurringTask,
   Task,
 } from "@/types/database";
-
-/**
- * Composición de los datos del dashboard.
- *
- * Regla de fiabilidad: cuando Supabase está configurado NUNCA se inyectan
- * datos de ejemplo. Si una consulta falla se devuelve vacío y se marca
- * `partial`, para que la interfaz pueda distinguir "no tengo nada" de
- * "no he podido leer". Los mocks solo existen en modo demo, es decir cuando
- * no hay Supabase configurado en absoluto.
- */
 
 export interface DashboardPayload {
   alerts: Alert[];
@@ -39,7 +22,6 @@ export interface DashboardPayload {
   partial: boolean;
 }
 
-/** Ninguna consulta debe ser ilimitada. */
 const LIMITS = {
   alerts: 50,
   emails: 50,
@@ -60,24 +42,22 @@ const EMPTY_DASHBOARD: DashboardPayload = {
   partial: false,
 };
 
-function buildDemoDashboard(): DashboardPayload {
-  const mockRecurring = MOCK_RECURRING_TASKS.filter((t) => t.is_active);
-  return {
-    ...EMPTY_DASHBOARD,
-    emails: MOCK_EMAILS,
-    leads: MOCK_LEADS,
-    calendarEvents: mergeCalendarWithRecurring(
-      getUpcomingCalendarEvents(MOCK_CALENDAR_EVENTS),
-      mockRecurring,
-      { daysBack: 60, daysAhead: 120, limit: 200 }
-    ),
-    recurringTasks: mockRecurring,
-  };
-}
+const TASK_COLUMNS =
+  "id, title, description, source, priority, status, ai_summary, suggested_action, project_id, metadata, created_at, updated_at";
+const ALERT_COLUMNS =
+  "id, title, message, severity, is_read, source, project_id, created_at";
+const EMAIL_COLUMNS =
+  "id, subject, sender, snippet, gmail_id, is_processed, received_at, created_at";
+const LEAD_COLUMNS =
+  "id, name, email, phone, source, status, notes, project_id, created_at";
+const CALENDAR_COLUMNS =
+  "id, title, description, start_at, end_at, all_day, calendar_name, location, html_link, google_event_id, project_id, created_at";
+const RECURRING_COLUMNS =
+  "id, title, description, frequency, schedule_day, project_id, is_active, created_at";
 
 export async function fetchDashboardData(): Promise<DashboardPayload> {
   if (!isSupabaseConfigured()) {
-    return buildDemoDashboard();
+    return EMPTY_DASHBOARD;
   }
 
   const admin = createAdminClient();
@@ -95,9 +75,7 @@ export async function fetchDashboardData(): Promise<DashboardPayload> {
     try {
       const { data, error } = await query();
       if (error) {
-        if (!isMissingTableError(error)) {
-          console.error(`[dashboard-data:${label}]`, error);
-        }
+        console.error(`[dashboard-data:${label}]`, error);
         partial = true;
         return [] as T;
       }
@@ -109,15 +87,13 @@ export async function fetchDashboardData(): Promise<DashboardPayload> {
     }
   };
 
-  // Los proyectos no se piden aquí: el cliente los carga por su cuenta desde
-  // /api/projects. Pedirlos también en este composer era una consulta extra
-  // por cada render y por cada llamada a herramienta del asistente.
   const [alerts, emails, leads, tasks, calendarEvents, recurringTasks] =
     await Promise.all([
       safeQuery<Alert[]>("alerts", async () =>
         admin
           .from("alerts")
-          .select("*")
+          .select(ALERT_COLUMNS)
+          .eq("owner_key", AURO_OWNER_KEY)
           .eq("is_read", false)
           .order("created_at", { ascending: false })
           .limit(LIMITS.alerts)
@@ -125,7 +101,8 @@ export async function fetchDashboardData(): Promise<DashboardPayload> {
       safeQuery<ImportantEmail[]>("emails", async () =>
         admin
           .from("important_emails")
-          .select("*")
+          .select(EMAIL_COLUMNS)
+          .eq("owner_key", AURO_OWNER_KEY)
           .eq("is_processed", false)
           .not("subject", "eq", "(Sin asunto)")
           .not("sender", "eq", "desconocido")
@@ -135,7 +112,8 @@ export async function fetchDashboardData(): Promise<DashboardPayload> {
       safeQuery<Lead[]>("leads", async () =>
         admin
           .from("leads")
-          .select("*")
+          .select(LEAD_COLUMNS)
+          .eq("owner_key", AURO_OWNER_KEY)
           .eq("status", "new")
           .order("created_at", { ascending: false })
           .limit(LIMITS.leads)
@@ -143,7 +121,8 @@ export async function fetchDashboardData(): Promise<DashboardPayload> {
       safeQuery<Task[]>("tasks", async () =>
         admin
           .from("tasks")
-          .select("*")
+          .select(TASK_COLUMNS)
+          .eq("owner_key", AURO_OWNER_KEY)
           .in("status", ["pending", "in_progress", "waiting_approval"])
           .order("created_at", { ascending: false })
           .limit(LIMITS.tasks)
@@ -151,7 +130,8 @@ export async function fetchDashboardData(): Promise<DashboardPayload> {
       safeQuery<CalendarEvent[]>("calendar", async () =>
         admin
           .from("calendar_events")
-          .select("*")
+          .select(CALENDAR_COLUMNS)
+          .eq("owner_key", AURO_OWNER_KEY)
           .gte("start_at", calendarFrom.toISOString())
           .order("start_at", { ascending: true })
           .limit(LIMITS.calendarEvents)
@@ -159,7 +139,8 @@ export async function fetchDashboardData(): Promise<DashboardPayload> {
       safeQuery<RecurringTask[]>("recurring", async () =>
         admin
           .from("recurring_tasks")
-          .select("*")
+          .select(RECURRING_COLUMNS)
+          .eq("owner_key", AURO_OWNER_KEY)
           .eq("is_active", true)
           .order("created_at", { ascending: true })
           .limit(LIMITS.recurringTasks)

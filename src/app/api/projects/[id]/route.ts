@@ -67,7 +67,10 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
   }
 
   try {
-    await deleteProject(params.id);
+    const deleted = await deleteProject(params.id);
+    if (!deleted) {
+      return NextResponse.json({ error: "Proyecto no encontrado" }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[api/projects DELETE]", error);

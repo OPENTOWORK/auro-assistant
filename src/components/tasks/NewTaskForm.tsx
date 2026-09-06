@@ -10,8 +10,6 @@ import {
   WEEKDAY_LABELS,
   type TaskKind,
 } from "@/lib/constants";
-import { isSupabaseConfigured } from "@/lib/config";
-import { createLocalTask, addLocalTask } from "@/lib/local-tasks";
 import { useProjects } from "@/components/projects/ProjectsProvider";
 import { sortProjectsByPriority } from "@/lib/project-utils";
 import type { Alert, RecurringTask, Task, TaskPriority } from "@/types/database";
@@ -68,10 +66,6 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
 
     try {
       if (kind === "alert") {
-        if (!isSupabaseConfigured()) {
-          throw new Error("Supabase no configurado.");
-        }
-
         const res = await fetch("/api/alerts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -89,10 +83,6 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
         if (!json.alert) throw new Error("Respuesta incompleta del servidor");
         onCreated({ kind: "alert", item: json.alert });
       } else if (kind === "weekly" || kind === "monthly") {
-        if (!isSupabaseConfigured()) {
-          throw new Error("Supabase no configurado.");
-        }
-
         const res = await fetch("/api/recurring-tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -111,7 +101,7 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
         }
         if (!json.task) throw new Error("Respuesta incompleta del servidor");
         onCreated({ kind: "recurring", item: json.task });
-      } else if (isSupabaseConfigured()) {
+      } else {
         const res = await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -130,16 +120,6 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
         }
         if (!data.task) throw new Error("Respuesta incompleta del servidor");
         onCreated({ kind: "task", item: data.task });
-      } else {
-        const task = createLocalTask({
-          title: title.trim(),
-          description: description.trim() || null,
-          priority,
-          source: "manual",
-          project_id: projectId || null,
-        });
-        addLocalTask(task);
-        onCreated({ kind: "task", item: task });
       }
 
       setTitle("");

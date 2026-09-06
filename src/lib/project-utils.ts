@@ -7,10 +7,6 @@ export function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-export function generateProjectId(): string {
-  return `p-${Date.now()}`;
-}
-
 export function sortProjectsByPriority<T extends { priority: number }>(
   projects: T[]
 ): T[] {

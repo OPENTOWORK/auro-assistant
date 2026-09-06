@@ -1,18 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPeriodKey } from "@/lib/recurring-period";
+import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 import type { RecurringFrequency } from "@/types/database";
-
-/**
- * Repositorio de completiones de tareas recurrentes.
- *
- * Una completión no guarda una fecha, guarda un PERIODO: la semana ISO para
- * las semanales y el mes para las mensuales. Así "hecho esta semana" sigue
- * siendo cierto el resto de la semana, y la escritura es idempotente gracias
- * a la restricción única (recurring_task_id, period_key).
- *
- * Antes esto vivía únicamente en localStorage, lo que impedía que el
- * asistente supiera qué se había completado.
- */
 
 export interface RecurringCompletion {
   recurring_task_id: string;
@@ -20,12 +9,10 @@ export interface RecurringCompletion {
   completed_at: string;
 }
 
-/** Claves de los periodos vigentes ahora mismo (semana actual y mes actual). */
 export function currentPeriodKeys(now = new Date()): string[] {
   return [getPeriodKey("weekly", now), getPeriodKey("monthly", now)];
 }
 
-/** Completiones de los periodos vigentes, para pintar los ticks. */
 export async function listCurrentCompletions(
   now = new Date()
 ): Promise<RecurringCompletion[]> {
@@ -34,6 +21,7 @@ export async function listCurrentCompletions(
   const { data, error } = await admin
     .from("recurring_completions")
     .select("recurring_task_id, period_key, completed_at")
+    .eq("owner_key", AURO_OWNER_KEY)
     .in("period_key", currentPeriodKeys(now))
     .limit(500);
 
@@ -41,11 +29,6 @@ export async function listCurrentCompletions(
   return (data ?? []) as RecurringCompletion[];
 }
 
-/**
- * Marca o desmarca una tarea recurrente en su periodo actual.
- * El `period_key` se calcula en el servidor a partir de la frecuencia, para
- * que el cliente no pueda escribir en periodos arbitrarios.
- */
 export async function setCompletion(
   recurringTaskId: string,
   frequency: RecurringFrequency,
@@ -55,9 +38,22 @@ export async function setCompletion(
   const admin = createAdminClient();
   const periodKey = getPeriodKey(frequency, now);
 
+  const { data: ownedTask, error: taskError } = await admin
+    .from("recurring_tasks")
+    .select("id")
+    .eq("id", recurringTaskId)
+    .eq("owner_key", AURO_OWNER_KEY)
+    .maybeSingle();
+
+  if (taskError) throw taskError;
+  if (!ownedTask) {
+    throw new Error("Tarea recurrente no encontrada");
+  }
+
   if (completed) {
     const { error } = await admin.from("recurring_completions").upsert(
       {
+        owner_key: AURO_OWNER_KEY,
         recurring_task_id: recurringTaskId,
         period_key: periodKey,
         completed_at: new Date().toISOString(),
@@ -70,6 +66,7 @@ export async function setCompletion(
       .from("recurring_completions")
       .delete()
       .eq("recurring_task_id", recurringTaskId)
+      .eq("owner_key", AURO_OWNER_KEY)
       .eq("period_key", periodKey);
     if (error) throw error;
   }
@@ -77,10 +74,6 @@ export async function setCompletion(
   return { completed, periodKey };
 }
 
-/**
- * Historial de completiones de una tarea, de más reciente a más antigua.
- * Lo consumirán el Decision Engine y el Memory Engine para detectar patrones.
- */
 export async function listCompletionHistory(
   recurringTaskId: string,
   limit = 24
@@ -91,6 +84,7 @@ export async function listCompletionHistory(
     .from("recurring_completions")
     .select("recurring_task_id, period_key, completed_at")
     .eq("recurring_task_id", recurringTaskId)
+    .eq("owner_key", AURO_OWNER_KEY)
     .order("completed_at", { ascending: false })
     .limit(limit);
 

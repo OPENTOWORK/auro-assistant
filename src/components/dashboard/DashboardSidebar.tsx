@@ -8,7 +8,7 @@ import { DemoBanner } from "@/components/layout/DemoBanner";
 import { isSupabaseConfigured } from "@/lib/config";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useProjects } from "@/components/projects/ProjectsProvider";
-import { countTasksByProject } from "@/lib/mock-data";
+import { countTasksByProject } from "@/lib/task-utils";
 import { sortProjectsByPriority } from "@/lib/project-utils";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -19,12 +19,11 @@ export function DashboardSidebar() {
     tasks,
     calendarEvents,
     loading,
-    isLive,
     error,
   } = useDashboardData();
 
   const allProjects = sortProjectsByPriority(projects);
-  const showDemo = !isSupabaseConfigured() && !loading && !isLive;
+  const showDemo = !isSupabaseConfigured();
 
   return (
     <div className="space-y-3">
@@ -54,7 +53,7 @@ export function DashboardSidebar() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-auro-muted py-2">Sin proyectos.</p>
+          <p className="text-sm text-auro-muted py-2">No hay proyectos todavía</p>
         )}
       </CollapsibleSection>
 

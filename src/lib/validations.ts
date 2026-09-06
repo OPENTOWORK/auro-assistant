@@ -53,10 +53,15 @@ export const projectFormSchema = z.object({
   slug: z.string().optional(),
 });
 
+const optionalUuid = z.preprocess((value) => {
+  if (value === "" || value === undefined) return null;
+  return value;
+}, z.string().uuid().nullable());
+
 export const createTaskSchema = z.object({
   title: z.string().min(1, "El título es obligatorio"),
   description: z.string().optional().nullable(),
-  project_id: z.string().optional().nullable(),
+  project_id: optionalUuid.optional(),
   project_slug: z.string().optional().nullable(),
   priority: taskPrioritySchema.default("medium"),
   source: taskSourceSchema.default("manual"),

@@ -1,40 +1,54 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createTaskSchema } from "@/lib/validations";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { isMissingTableError } from "@/lib/supabase/errors";
+import { createTask, listTasks } from "@/lib/repositories/tasks";
 import { isSupabaseConfigured } from "@/lib/config";
-import { getLocalTasks } from "@/lib/local-tasks";
 import { requireOwner } from "@/lib/auth/require-owner";
 
-export async function GET() {
+const projectIdQuerySchema = z.string().uuid();
+
+export async function GET(request: Request) {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ tasks: getLocalTasks(), tableMissing: false });
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
   }
 
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("tasks")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const { searchParams } = new URL(request.url);
+  const rawProjectId = searchParams.get("projectId");
+  let projectId: string | undefined;
 
-  if (error) {
-    if (isMissingTableError(error)) {
-      return NextResponse.json({ tasks: [], tableMissing: true });
+  if (rawProjectId) {
+    const parsed = projectIdQuerySchema.safeParse(rawProjectId);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "projectId inválido" }, { status: 400 });
     }
+    projectId = parsed.data;
+  }
+
+  try {
+    const tasks = await listTasks({ projectId });
+    return NextResponse.json({ tasks });
+  } catch (error) {
     console.error("[api/tasks GET]", error);
     return NextResponse.json({ error: "Error al cargar tareas" }, { status: 500 });
   }
-
-  return NextResponse.json({ tasks: data ?? [], tableMissing: false });
 }
 
 export async function POST(request: Request) {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
+
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json(
+      { error: "Supabase no configurado" },
+      { status: 503 }
+    );
+  }
 
   let body: unknown;
   try {
@@ -45,48 +59,22 @@ export async function POST(request: Request) {
 
   const parsed = createTaskSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Datos inválidos", details: parsed.error.flatten() },
-      { status: 400 }
-    );
-  }
-
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json(
-      { error: "Supabase no configurado" },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
   const { title, description, priority, source, project_id } = parsed.data;
 
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("tasks")
-    .insert({
+  try {
+    const task = await createTask({
       title,
-      description: description ?? null,
+      description,
       priority,
       source,
-      status: "pending",
-      project_id: project_id ?? null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    if (isMissingTableError(error)) {
-      return NextResponse.json(
-        {
-          error: "La tabla tasks no existe. Ejecuta npm run db:migrate",
-          tableMissing: true,
-        },
-        { status: 503 }
-      );
-    }
+      project_id,
+    });
+    return NextResponse.json({ task }, { status: 201 });
+  } catch (error) {
     console.error("[api/tasks POST]", error);
     return NextResponse.json({ error: "Error al crear la tarea" }, { status: 500 });
   }
-
-  return NextResponse.json({ task: data }, { status: 201 });
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TaskCard } from "@/components/dashboard/TaskCard";
 import { ProjectForm } from "@/components/projects/ProjectForm";
 import { useProjects } from "@/components/projects/ProjectsProvider";
@@ -16,7 +16,7 @@ import {
   PROJECT_TYPE_LABELS,
 } from "@/lib/constants";
 import { isSupabaseConfigured } from "@/lib/config";
-import { getTasksByProject, MOCK_TASKS } from "@/lib/mock-data";
+import type { Task } from "@/types/database";
 
 interface ProjectDetailViewProps {
   slug: string;
@@ -24,11 +24,35 @@ interface ProjectDetailViewProps {
 
 export function ProjectDetailView({ slug }: ProjectDetailViewProps) {
   const router = useRouter();
-  const showDemo = !isSupabaseConfigured();
   const { getBySlug, updateProject, deleteProject, loading } = useProjects();
+  const showDemo = !isSupabaseConfigured();
   const [editing, setEditing] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
 
   const project = getBySlug(slug);
+  const projectId = project?.id;
+
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    setTasksLoading(true);
+    fetch(`/api/tasks?projectId=${projectId}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("fail");
+        const json = await res.json();
+        if (!cancelled) setTasks(Array.isArray(json.tasks) ? json.tasks : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTasks([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTasksLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   if (loading) {
     return <p className="text-sm text-auro-muted">Cargando proyecto...</p>;
@@ -45,7 +69,6 @@ export function ProjectDetailView({ slug }: ProjectDetailViewProps) {
     );
   }
 
-  const tasks = getTasksByProject(project.id, MOCK_TASKS);
   const pendingTasks = tasks.filter(
     (t) => t.status === "pending" || t.status === "waiting_approval"
   );
@@ -129,7 +152,11 @@ export function ProjectDetailView({ slug }: ProjectDetailViewProps) {
           </span>
         </div>
 
-        {tasks.length > 0 ? (
+        {tasksLoading ? (
+          <p className="text-sm text-auro-muted text-center py-8">
+            Cargando tareas...
+          </p>
+        ) : tasks.length > 0 ? (
           <div className="space-y-3">
             {tasks.map((task) => (
               <TaskCard key={task.id} task={task} />
