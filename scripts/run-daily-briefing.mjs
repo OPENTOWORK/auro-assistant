@@ -16,8 +16,12 @@ function loadConfig() {
 
 function requireCronSecret() {
   const secret = process.env.AURO_CRON_SECRET;
-  if (!secret) {
-    fail("AURO_CRON_SECRET no configurado");
+  if (
+    secret === undefined ||
+    secret.trim() === "" ||
+    /\s/.test(secret)
+  ) {
+    fail("AURO_CRON_SECRET no configurado correctamente");
   }
   return secret;
 }
@@ -133,14 +137,24 @@ async function main() {
   const secret = requireCronSecret();
   const baseUrl = resolveLocalUrl(process.env.AURO_LOCAL_URL);
 
+  let healthResponse;
   try {
-    await fetchWithTimeout(
+    healthResponse = await fetchWithTimeout(
       `${baseUrl}/api/health`,
       { method: "GET", headers: { Accept: "application/json" } },
       HEALTH_TIMEOUT_MS
     );
   } catch {
     fail(`AURO local no está disponible en ${baseUrl}`);
+  }
+
+  if (!healthResponse.ok) {
+    fail(`AURO local respondió con health inválido en ${baseUrl}`);
+  }
+
+  const healthBody = parseJsonBody(await healthResponse.text());
+  if (healthBody === undefined || healthBody?.ok !== true) {
+    fail(`AURO local respondió con health inválido en ${baseUrl}`);
   }
 
   let response;
