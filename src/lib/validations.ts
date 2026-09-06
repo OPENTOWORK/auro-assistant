@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { isValidDateOnly } from "@/lib/intelligence/dates";
+import {
+  MAX_AVAILABLE_MINUTES,
+  MIN_AVAILABLE_MINUTES,
+} from "@/lib/intelligence/decision-engine";
 
 export const taskSourceSchema = z.enum([
   "gmail",
@@ -130,8 +134,8 @@ export const updateTaskStatusBodySchema = z
 export const availableMinutesSchema = z.coerce
   .number()
   .int()
-  .min(15)
-  .max(720);
+  .min(MIN_AVAILABLE_MINUTES)
+  .max(MAX_AVAILABLE_MINUTES);
 
 export const alertSeveritySchema = z.enum(["info", "warning", "critical"]);
 

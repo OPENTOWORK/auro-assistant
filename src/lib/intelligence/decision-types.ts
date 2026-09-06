@@ -45,7 +45,12 @@ export interface FocusPlan {
 
 export interface CalendarDecisionContext {
   today_events: CalendarEvent[];
+  /**
+   * Siguiente evento no terminado dentro de la ventana cargada
+   * (en curso, más tarde hoy, o mañana). No implica “de hoy”.
+   */
   next_event: CalendarEvent | null;
+  /** Eventos que tocan el día `today` en AURO_TIMEZONE. */
   calendar_event_count: number;
 }
 

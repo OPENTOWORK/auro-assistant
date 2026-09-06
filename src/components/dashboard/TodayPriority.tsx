@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { formatDateOnly, formatDateTime } from "@/lib/intelligence/dates";
+import { topDecisionReasons } from "@/lib/intelligence/decision-engine";
 import type { DailyDecision, RankedTask } from "@/lib/intelligence/decision-types";
 
 export function TodayPriority() {
@@ -69,10 +70,24 @@ export function TodayPriority() {
   );
 }
 
+function planningLabel(item: RankedTask): string | null {
+  const plannedToday = item.reasons.some(
+    (reason) => reason.code === "planned_today"
+  );
+  if (plannedToday) return "Planificada para hoy";
+  if (item.task.planned_for) {
+    return `Planificada: ${formatDateOnly(item.task.planned_for)}`;
+  }
+  return null;
+}
+
 function PriorityRow({ item, index }: { item: RankedTask; index: number }) {
-  const topReasons = item.reasons
-    .filter((reason) => reason.points > 0)
-    .slice(0, 2);
+  const topReasons = topDecisionReasons(item.reasons, 2);
+  const details = [
+    planningLabel(item),
+    item.task.due_at ? `Deadline: ${formatDateTime(item.task.due_at)}` : null,
+    item.task.estimated_minutes ? `${item.task.estimated_minutes} min` : null,
+  ].filter((part): part is string => Boolean(part));
 
   return (
     <Link href={`/tareas/${item.task.id}`}>
@@ -88,17 +103,9 @@ function PriorityRow({ item, index }: { item: RankedTask; index: number }) {
             {topReasons.map((reason) => reason.label).join(" · ")}
           </p>
         )}
-        <p className="text-[11px] text-auro-muted mt-1">
-          {item.task.planned_for
-            ? `Hoy: ${formatDateOnly(item.task.planned_for)}`
-            : null}
-          {item.task.due_at
-            ? `${item.task.planned_for ? " · " : ""}Deadline: ${formatDateTime(item.task.due_at)}`
-            : null}
-          {item.task.estimated_minutes
-            ? `${item.task.planned_for || item.task.due_at ? " · " : ""}${item.task.estimated_minutes} min`
-            : null}
-        </p>
+        {details.length > 0 && (
+          <p className="text-[11px] text-auro-muted mt-1">{details.join(" · ")}</p>
+        )}
       </Card>
     </Link>
   );

@@ -43,6 +43,31 @@ export const MAX_RECOMMENDED = 5;
 export const MIN_AVAILABLE_MINUTES = 15;
 export const MAX_AVAILABLE_MINUTES = 720;
 
+export class InvalidAvailableMinutesError extends Error {
+  constructor() {
+    super(
+      `availableMinutes must be an integer between ${MIN_AVAILABLE_MINUTES} and ${MAX_AVAILABLE_MINUTES}`
+    );
+    this.name = "InvalidAvailableMinutesError";
+  }
+}
+
+export function isValidAvailableMinutes(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_AVAILABLE_MINUTES &&
+    value <= MAX_AVAILABLE_MINUTES
+  );
+}
+
+export function assertValidAvailableMinutes(value: number | undefined): void {
+  if (value === undefined) return;
+  if (!isValidAvailableMinutes(value)) {
+    throw new InvalidAvailableMinutesError();
+  }
+}
+
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
 
@@ -296,8 +321,9 @@ export function buildCalendarContext(
 
   return {
     today_events: todayEvents,
+    // No es “siguiente de hoy”: puede ser en curso, más tarde o mañana.
     next_event: nextEvent,
-    calendar_event_count: events.length,
+    calendar_event_count: todayEvents.length,
   };
 }
 
@@ -310,6 +336,7 @@ export function buildFocusPlan(
   actionable: RankedTask[],
   availableMinutes: number
 ): FocusPlan {
+  assertValidAvailableMinutes(availableMinutes);
   const selected: RankedTask[] = [];
   let used = 0;
 
@@ -330,9 +357,25 @@ export function buildFocusPlan(
   };
 }
 
+export function topDecisionReasons(
+  reasons: DecisionReason[],
+  limit = 2
+): DecisionReason[] {
+  return [...reasons]
+    .filter((reason) => reason.points > 0)
+    .sort((a, b) => {
+      if (a.points !== b.points) return b.points - a.points;
+      if (a.code < b.code) return -1;
+      if (a.code > b.code) return 1;
+      return 0;
+    })
+    .slice(0, limit);
+}
+
 export function runDecisionEngine(input: DecisionEngineInput): DailyDecision {
   const { now, today, timezone, tasks, projects, events, availableMinutes } =
     input;
+  assertValidAvailableMinutes(availableMinutes);
   const projectById = new Map(projects.map((project) => [project.id, project]));
 
   const ranked = tasks
