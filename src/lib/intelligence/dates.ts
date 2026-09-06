@@ -24,6 +24,43 @@ function daysInMonth(year: number, month: number): number {
   return DAYS_IN_MONTH[month - 1] ?? 0;
 }
 
+export const DEFAULT_AURO_TIMEZONE = "Europe/Madrid";
+
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Zona IANA del motor server-side.
+ * Si AURO_TIMEZONE falta o es inválida: Europe/Madrid.
+ */
+export function getAuroTimezone(): string {
+  const raw = process.env.AURO_TIMEZONE?.trim();
+  if (raw && isValidTimeZone(raw)) return raw;
+  return DEFAULT_AURO_TIMEZONE;
+}
+
+/** YYYY-MM-DD en una zona IANA. No usa el timezone del proceso. */
+export function dateOnlyInTimeZone(now: Date, timezone: string): string {
+  const tz = isValidTimeZone(timezone) ? timezone : DEFAULT_AURO_TIMEZONE;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) return localDateOnly(now);
+  return `${year}-${month}-${day}`;
+}
+
 /** Día de calendario real YYYY-MM-DD. No usa `new Date("YYYY-MM-DD")`. */
 export function isValidDateOnly(value: string): boolean {
   const match = DATE_ONLY_RE.exec(value);

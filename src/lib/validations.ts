@@ -127,6 +127,12 @@ export const updateTaskStatusBodySchema = z
   })
   .strict();
 
+export const availableMinutesSchema = z.coerce
+  .number()
+  .int()
+  .min(15)
+  .max(720);
+
 export const alertSeveritySchema = z.enum(["info", "warning", "critical"]);
 
 export const createAlertSchema = z.object({

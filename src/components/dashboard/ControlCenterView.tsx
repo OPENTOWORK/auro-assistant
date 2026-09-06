@@ -3,6 +3,7 @@
 import { AuroChat } from "@/components/assistant/AuroChat";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { TodayAgenda } from "@/components/dashboard/TodayAgenda";
+import { TodayPriority } from "@/components/dashboard/TodayPriority";
 
 export function ControlCenterView() {
   return (
@@ -30,6 +31,7 @@ export function ControlCenterView() {
         </aside>
       </div>
 
+      <TodayPriority />
       <TodayAgenda />
     </div>
   );

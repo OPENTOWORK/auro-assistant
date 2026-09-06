@@ -69,6 +69,23 @@ export const ASSISTANT_TOOLS: FunctionTool[] = [
   },
   {
     type: "function",
+    name: "get_daily_plan",
+    description:
+      "Plan del día calculado por el Decision Engine de AURO. Devuelve ranking explicable, recomendadas, bloqueadas, en espera, vencidas, planificadas hoy y opcionalmente un focus_plan si hay minutos disponibles. No recalcula scores: úsalo tal cual.",
+    parameters: {
+      type: "object",
+      properties: {
+        available_minutes: {
+          type: "integer",
+          description: "Minutos disponibles ahora (15–720). Si se indica, incluye focus_plan greedy.",
+        },
+      },
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: "function",
     name: "get_user_memory",
     description:
       "Memoria confirmada del usuario: nombre, preferencias, proyectos prioritarios, rutinas e instrucciones.",
@@ -146,6 +163,7 @@ export const ASSISTANT_TOOLS: FunctionTool[] = [
 ];
 
 export const CHAT_SUGGESTIONS = [
+  "¿Qué hago primero?",
   "¿Qué tengo hoy?",
   "Resume mis correos destacados",
   "¿Cómo va Dralo?",

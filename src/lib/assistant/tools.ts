@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchDashboardData } from "@/lib/api/dashboard-data";
 import { listProjects } from "@/lib/repositories/projects";
 import { listTasks } from "@/lib/repositories/tasks";
+import { getDailyDecision } from "@/lib/intelligence/daily-decision";
+import { availableMinutesSchema } from "@/lib/validations";
 import {
   daysSinceActivity,
   isProjectOverdue,
@@ -82,6 +84,18 @@ export async function runAssistantTool(
           planned_today: isTaskPlannedToday(task),
         })),
       };
+    }
+    case "get_daily_plan": {
+      const rawMinutes = args.available_minutes;
+      let availableMinutes: number | undefined;
+      if (rawMinutes !== undefined && rawMinutes !== null && rawMinutes !== "") {
+        const parsed = availableMinutesSchema.safeParse(rawMinutes);
+        if (!parsed.success) {
+          return { error: "available_minutes debe ser un entero entre 15 y 720" };
+        }
+        availableMinutes = parsed.data;
+      }
+      return { decision: await getDailyDecision(availableMinutes) };
     }
     case "get_calendar_events": {
       const dashboard = await fetchDashboardData();
