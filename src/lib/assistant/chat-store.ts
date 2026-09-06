@@ -2,29 +2,66 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 import { isSupabaseConfigured } from "@/lib/config";
 import {
+  fallbackFindOwnedConversation,
   fallbackGetOrCreateConversation,
   fallbackLoadMessages,
   fallbackSaveMessage,
 } from "@/lib/assistant/fallback-store";
 import type { ChatMessage } from "@/types/assistant";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export class ConversationNotFoundError extends Error {
+  constructor() {
+    super("Conversación no encontrada");
+    this.name = "ConversationNotFoundError";
+  }
+}
+
+async function findOwnedConversationId(
+  admin: SupabaseClient,
+  conversationId: string
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from("chat_conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("owner_key", AURO_OWNER_KEY)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
+async function requireOwnedConversation(
+  conversationId: string,
+  admin?: SupabaseClient
+): Promise<string> {
+  if (!isSupabaseConfigured()) {
+    const owned = fallbackFindOwnedConversation(conversationId);
+    if (!owned) throw new ConversationNotFoundError();
+    return owned;
+  }
+
+  const client = admin ?? createAdminClient();
+  const owned = await findOwnedConversationId(client, conversationId);
+  if (!owned) throw new ConversationNotFoundError();
+  return owned;
+}
 
 export async function getOrCreateConversation(
   conversationId?: string
 ): Promise<string> {
   if (!isSupabaseConfigured()) {
-    return fallbackGetOrCreateConversation(conversationId);
+    if (conversationId) {
+      return requireOwnedConversation(conversationId);
+    }
+    return fallbackGetOrCreateConversation();
   }
 
   const admin = createAdminClient();
 
   if (conversationId) {
-    const { data, error } = await admin
-      .from("chat_conversations")
-      .select("id")
-      .eq("id", conversationId)
-      .maybeSingle();
-    if (error) throw error;
-    if (data?.id) return data.id;
+    return requireOwnedConversation(conversationId, admin);
   }
 
   const { data, error } = await admin
@@ -44,10 +81,13 @@ export async function loadMessages(
   limit = 40
 ): Promise<ChatMessage[]> {
   if (!isSupabaseConfigured()) {
+    await requireOwnedConversation(conversationId);
     return fallbackLoadMessages(conversationId, limit);
   }
 
   const admin = createAdminClient();
+  await requireOwnedConversation(conversationId, admin);
+
   const { data, error } = await admin
     .from("chat_messages")
     .select("*")
@@ -68,10 +108,13 @@ export async function saveMessage(
   metadata: Record<string, unknown> = {}
 ) {
   if (!isSupabaseConfigured()) {
+    await requireOwnedConversation(conversationId);
     return fallbackSaveMessage(conversationId, role, content, metadata);
   }
 
   const admin = createAdminClient();
+  await requireOwnedConversation(conversationId, admin);
+
   const { data, error } = await admin
     .from("chat_messages")
     .insert({
@@ -87,13 +130,19 @@ export async function saveMessage(
     throw error;
   }
 
-  const { error: touchError } = await admin
+  const { data: touched, error: touchError } = await admin
     .from("chat_conversations")
     .update({ updated_at: new Date().toISOString() })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .eq("owner_key", AURO_OWNER_KEY)
+    .select("id")
+    .maybeSingle();
 
   if (touchError) {
     throw touchError;
+  }
+  if (!touched) {
+    throw new ConversationNotFoundError();
   }
 
   return data as ChatMessage;

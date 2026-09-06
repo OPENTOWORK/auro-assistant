@@ -8,6 +8,7 @@ import type {
 import { getOpenAIClient } from "@/lib/openai";
 import { ASSISTANT_TOOLS } from "@/lib/assistant/constants";
 import {
+  ConversationNotFoundError,
   getOrCreateConversation,
   loadMessages,
   saveMessage,
@@ -50,6 +51,12 @@ export async function GET(request: Request) {
     ]);
     return NextResponse.json({ conversationId: convId, messages, pendingActions });
   } catch (error) {
+    if (error instanceof ConversationNotFoundError) {
+      return NextResponse.json(
+        { error: "Conversación no encontrada" },
+        { status: 404 }
+      );
+    }
     console.error("[api/assistant/chat GET]", error);
     return NextResponse.json(
       { error: "No se pudo cargar la conversación" },
@@ -165,6 +172,12 @@ export async function POST(request: Request) {
       pendingActions,
     });
   } catch (error) {
+    if (error instanceof ConversationNotFoundError) {
+      return NextResponse.json(
+        { error: "Conversación no encontrada" },
+        { status: 404 }
+      );
+    }
     console.error("[api/assistant/chat POST]", error);
     return NextResponse.json(
       { error: "No se pudo completar la conversación" },

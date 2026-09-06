@@ -27,13 +27,15 @@ const userMemory = new Map<
 
 let defaultConversationId: string | null = null;
 
-export function fallbackGetOrCreateConversation(
-  conversationId?: string
-): string {
-  if (conversationId && conversations.has(conversationId)) {
-    return conversationId;
-  }
+export function fallbackFindOwnedConversation(
+  conversationId: string
+): string | null {
+  const conv = conversations.get(conversationId);
+  if (conv?.owner_key === AURO_OWNER_KEY) return conversationId;
+  return null;
+}
 
+export function fallbackGetOrCreateConversation(): string {
   if (defaultConversationId && conversations.has(defaultConversationId)) {
     return defaultConversationId;
   }
@@ -52,6 +54,9 @@ export function fallbackLoadMessages(
   conversationId: string,
   limit = 40
 ): ChatMessage[] {
+  if (!fallbackFindOwnedConversation(conversationId)) {
+    throw new Error("Conversación no encontrada");
+  }
   const list = messages.get(conversationId) ?? [];
   return list.slice(-limit);
 }
@@ -62,12 +67,8 @@ export function fallbackSaveMessage(
   content: string,
   metadata: Record<string, unknown> = {}
 ): ChatMessage {
-  if (!conversations.has(conversationId)) {
-    conversations.set(conversationId, {
-      owner_key: AURO_OWNER_KEY,
-      title: "Conversación con Auro",
-    });
-    messages.set(conversationId, []);
+  if (!fallbackFindOwnedConversation(conversationId)) {
+    throw new Error("Conversación no encontrada");
   }
 
   const message: ChatMessage = {
