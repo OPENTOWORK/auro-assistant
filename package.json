@@ -1,0 +1,49 @@
+{
+  "name": "auro-personal-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "setup:supabase": "powershell -ExecutionPolicy Bypass -File scripts/setup-supabase.ps1",
+    "test:supabase": "node scripts/test-supabase-connection.mjs",
+    "create:user": "node scripts/create-user.mjs",
+    "db:push": "npx supabase db push",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:verify": "node scripts/db-verify.mjs",
+    "db:inspect": "node scripts/db-inspect.mjs",
+    "setup:n8n-postgres": "node scripts/setup-n8n-postgres-credential.mjs",
+    "setup:n8n-workflows": "node scripts/setup-n8n-workflows.mjs",
+    "activate:n8n-workflows": "node scripts/activate-n8n-workflows.mjs",
+    "redeploy:n8n-workflows": "node scripts/redeploy-n8n-workflows.mjs",
+    "deactivate:n8n-gmail": "node scripts/deactivate-n8n-gmail.mjs",
+    "sync:n8n": "node scripts/sync-n8n-workflows.mjs",
+    "sync:google": "node scripts/sync-google-from-n8n.mjs"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.8",
+    "lucide-react": "^1.21.0",
+    "next": "14.2.29",
+    "openai": "^4.104.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.25.28"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.50",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.6",
+    "autoprefixer": "^10.4.21",
+    "better-sqlite3": "^13.0.2",
+    "crypto-js": "^4.2.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.29",
+    "pg": "^8.22.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3"
+  }
+}

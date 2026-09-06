@@ -1,0 +1,14 @@
+---
+description: Repositorio oficial de GitHub para este proyecto
+alwaysApply: true
+---
+
+# Repositorio GitHub
+
+El remoto oficial de este proyecto (Auro / Charly Personal Assistant) es:
+
+- Cuenta: `estoicoycalistenico`
+- Repositorio: `Estoico-y-calistenico`
+- URL: https://github.com/estoicoycalistenico/Estoico-y-calistenico.git
+
+No crear otro repositorio ni cambiar `origin`. Commits y pushes van a esta URL.
