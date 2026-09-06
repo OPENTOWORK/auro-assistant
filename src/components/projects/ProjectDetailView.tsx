@@ -8,6 +8,7 @@ import { ProjectForm } from "@/components/projects/ProjectForm";
 import { useProjects } from "@/components/projects/ProjectsProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { AppIcon, ProjectIcon } from "@/components/ui/AppIcon";
 import { DemoBanner } from "@/components/layout/DemoBanner";
 import {
@@ -16,6 +17,12 @@ import {
   PROJECT_TYPE_LABELS,
 } from "@/lib/constants";
 import { isSupabaseConfigured } from "@/lib/config";
+import {
+  deadlineUrgency,
+  formatDateOnly,
+  formatDateTime,
+} from "@/lib/intelligence/dates";
+import { formatRelativeTime } from "@/lib/utils";
 import type { Task } from "@/types/database";
 
 interface ProjectDetailViewProps {
@@ -129,6 +136,29 @@ export function ProjectDetailView({ slug }: ProjectDetailViewProps) {
             </div>
           </div>
 
+          <Card className="space-y-3">
+            <IntelligenceField label="Objetivo" value={project.objective} />
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-auro-muted">
+                Deadline
+              </p>
+              <DeadlineValue deadline={project.deadline} />
+            </div>
+            <IntelligenceField label="Siguiente acción" value={project.next_action} />
+            <IntelligenceField label="Bloqueo" value={project.blocked_reason} />
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-auro-muted">
+                Última actividad
+              </p>
+              <p className="text-sm text-auro-text">
+                {formatDateTime(project.last_activity_at)}
+                <span className="text-xs text-auro-muted ml-2">
+                  ({formatRelativeTime(project.last_activity_at)})
+                </span>
+              </p>
+            </div>
+          </Card>
+
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
               <AppIcon name="pencil" className="h-3.5 w-3.5 mr-1.5" />
@@ -169,5 +199,56 @@ export function ProjectDetailView({ slug }: ProjectDetailViewProps) {
         )}
       </section>
     </div>
+  );
+}
+
+function IntelligenceField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+  const text = value?.trim();
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-auro-muted">
+        {label}
+      </p>
+      <p className={text ? "text-sm text-auro-text" : "text-sm text-auro-muted"}>
+        {text || "Sin definir"}
+      </p>
+    </div>
+  );
+}
+
+function DeadlineValue({ deadline }: { deadline: string | null }) {
+  if (!deadline) {
+    return <p className="text-sm text-auro-muted">Sin definir</p>;
+  }
+
+  const urgency = deadlineUrgency(deadline);
+  const note =
+    urgency === "overdue"
+      ? "Venció"
+      : urgency === "today"
+        ? "Vence hoy"
+        : urgency === "soon"
+          ? "Próxima"
+          : null;
+
+  return (
+    <p
+      className={
+        urgency === "overdue"
+          ? "text-sm text-red-400"
+          : urgency === "today" || urgency === "soon"
+            ? "text-sm text-amber-400"
+            : "text-sm text-auro-text"
+      }
+    >
+      {formatDateOnly(deadline)}
+      {note ? <span className="ml-2 text-xs">({note})</span> : null}
+    </p>
   );
 }

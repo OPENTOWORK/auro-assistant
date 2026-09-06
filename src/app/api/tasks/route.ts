@@ -62,7 +62,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
-  const { title, description, priority, source, project_id } = parsed.data;
+  const {
+    title,
+    description,
+    priority,
+    source,
+    project_id,
+    due_at,
+    planned_for,
+    estimated_minutes,
+    blocked_reason,
+  } = parsed.data;
 
   try {
     const task = await createTask({
@@ -71,6 +81,10 @@ export async function POST(request: Request) {
       priority,
       source,
       project_id,
+      due_at,
+      planned_for,
+      estimated_minutes,
+      blocked_reason,
     });
     return NextResponse.json({ task }, { status: 201 });
   } catch (error) {

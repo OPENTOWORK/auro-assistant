@@ -6,7 +6,7 @@ export const ASSISTANT_TOOLS: FunctionTool[] = [
     type: "function",
     name: "get_projects",
     description:
-      "Lista los proyectos del usuario con prioridad, estado y descripción.",
+      "Lista los proyectos del usuario con objetivo, deadline, siguiente acción, bloqueo, última actividad y señales calculadas (stalled, overdue, days_since_activity).",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     strict: true,
   },
@@ -14,7 +14,7 @@ export const ASSISTANT_TOOLS: FunctionTool[] = [
     type: "function",
     name: "get_tasks",
     description:
-      "Lista tareas pendientes, en progreso o esperando aprobación. Opcionalmente filtra por proyecto.",
+      "Lista tareas abiertas con deadline, planned_for, estimación, bloqueo, completed_at y señales calculadas (overdue, planned_today). Opcionalmente filtra por proyecto.",
     parameters: {
       type: "object",
       properties: {

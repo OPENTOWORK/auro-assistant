@@ -9,6 +9,7 @@ import { NewTaskForm } from "@/components/tasks/NewTaskForm";
 import { Button } from "@/components/ui/Button";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { isTaskPlannedToday, OPEN_TASK_STATUSES } from "@/lib/intelligence/project-health";
 import type { Alert, RecurringTask, Task } from "@/types/database";
 import type { CreatedItem } from "@/components/tasks/NewTaskForm";
 
@@ -96,6 +97,11 @@ export function TareasView() {
   }
 
   const pageLoading = loading || dashboardLoading;
+  const todayTasks = tasks.filter((task) => isTaskPlannedToday(task));
+  const restTasks = tasks.filter(
+    (task) =>
+      OPEN_TASK_STATUSES.includes(task.status) && !isTaskPlannedToday(task)
+  );
 
   return (
     <div className="space-y-4">
@@ -184,14 +190,30 @@ export function TareasView() {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Tareas prioritarias" count={tasks.length} defaultOpen>
+      <CollapsibleSection title="Hoy" count={todayTasks.length} defaultOpen>
         {pageLoading ? (
           <p className="text-sm text-auro-muted py-2">Cargando tareas...</p>
-        ) : tasks.length > 0 ? (
-          tasks.map((task) => <TaskCard key={task.id} task={task} />)
+        ) : todayTasks.length > 0 ? (
+          todayTasks.map((task) => <TaskCard key={task.id} task={task} />)
         ) : (
           <p className="text-sm text-auro-muted py-2">
-            No hay tareas pendientes. Usa &quot;+ Nueva&quot; para crear una.
+            No hay tareas planificadas para hoy.
+          </p>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Próximas / resto"
+        count={restTasks.length}
+        defaultOpen={restTasks.length > 0}
+      >
+        {pageLoading ? (
+          <p className="text-sm text-auro-muted py-2">Cargando tareas...</p>
+        ) : restTasks.length > 0 ? (
+          restTasks.map((task) => <TaskCard key={task.id} task={task} />)
+        ) : (
+          <p className="text-sm text-auro-muted py-2">
+            No hay más tareas abiertas.
           </p>
         )}
       </CollapsibleSection>

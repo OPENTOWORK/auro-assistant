@@ -11,6 +11,7 @@ import {
   type TaskKind,
 } from "@/lib/constants";
 import { useProjects } from "@/components/projects/ProjectsProvider";
+import { datetimeLocalToIso } from "@/lib/intelligence/dates";
 import { sortProjectsByPriority } from "@/lib/project-utils";
 import type { Alert, RecurringTask, Task, TaskPriority } from "@/types/database";
 
@@ -48,6 +49,10 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [kind, setKind] = useState<TaskKind>("priority");
   const [scheduleDay, setScheduleDay] = useState("1");
+  const [dueAt, setDueAt] = useState("");
+  const [plannedFor, setPlannedFor] = useState("");
+  const [estimatedMinutes, setEstimatedMinutes] = useState("");
+  const [blockedReason, setBlockedReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +107,9 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
         if (!json.task) throw new Error("Respuesta incompleta del servidor");
         onCreated({ kind: "recurring", item: json.task });
       } else {
+        const minutes = estimatedMinutes.trim()
+          ? Number(estimatedMinutes)
+          : null;
         const res = await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -111,6 +119,10 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
             priority,
             source: "manual",
             project_id: projectId || null,
+            due_at: datetimeLocalToIso(dueAt),
+            planned_for: plannedFor || null,
+            estimated_minutes: Number.isFinite(minutes) ? minutes : null,
+            blocked_reason: blockedReason.trim() || null,
           }),
         });
 
@@ -128,6 +140,10 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
       setPriority("medium");
       setKind("priority");
       setScheduleDay("1");
+      setDueAt("");
+      setPlannedFor("");
+      setEstimatedMinutes("");
+      setBlockedReason("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear");
     } finally {
@@ -264,6 +280,70 @@ export function NewTaskForm({ onCreated, onCancel }: NewTaskFormProps) {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {kind === "priority" && (
+          <div className="space-y-3 rounded-lg border border-auro-border/70 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-auro-muted">
+              Planificación
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label htmlFor="task-due" className="text-xs font-medium text-auro-muted">
+                  Deadline
+                </label>
+                <input
+                  id="task-due"
+                  type="datetime-local"
+                  value={dueAt}
+                  onChange={(e) => setDueAt(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="task-planned" className="text-xs font-medium text-auro-muted">
+                  Planificada para
+                </label>
+                <input
+                  id="task-planned"
+                  type="date"
+                  value={plannedFor}
+                  onChange={(e) => setPlannedFor(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label htmlFor="task-minutes" className="text-xs font-medium text-auro-muted">
+                  Estimación (minutos)
+                </label>
+                <input
+                  id="task-minutes"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  value={estimatedMinutes}
+                  onChange={(e) => setEstimatedMinutes(e.target.value)}
+                  className={inputClass}
+                  placeholder="60"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="task-block" className="text-xs font-medium text-auro-muted">
+                  Bloqueo
+                </label>
+                <input
+                  id="task-block"
+                  value={blockedReason}
+                  onChange={(e) => setBlockedReason(e.target.value)}
+                  maxLength={2000}
+                  className={inputClass}
+                  placeholder="Opcional"
+                />
+              </div>
+            </div>
           </div>
         )}
 

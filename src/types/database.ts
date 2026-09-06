@@ -51,6 +51,11 @@ export interface Project {
   color: string;
   url?: string | null;
   created_at: string;
+  objective: string | null;
+  deadline: string | null;
+  next_action: string | null;
+  blocked_reason: string | null;
+  last_activity_at: string;
 }
 
 export type RecurringFrequency = "weekly" | "monthly";
@@ -80,6 +85,11 @@ export interface Task {
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  due_at: string | null;
+  planned_for: string | null;
+  estimated_minutes: number | null;
+  blocked_reason: string | null;
+  completed_at: string | null;
 }
 
 export interface Approval {

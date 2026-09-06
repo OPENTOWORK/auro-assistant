@@ -8,7 +8,7 @@ import type {
 } from "@/types/database";
 
 const COLUMNS =
-  "id, title, description, source, priority, status, ai_summary, suggested_action, project_id, metadata, created_at, updated_at";
+  "id, title, description, source, priority, status, ai_summary, suggested_action, project_id, metadata, created_at, updated_at, due_at, planned_for, estimated_minutes, blocked_reason, completed_at";
 
 const DEFAULT_LIMIT = 200;
 
@@ -22,6 +22,21 @@ export interface TaskInput {
   ai_summary?: string | null;
   suggested_action?: string | null;
   metadata?: Record<string, unknown>;
+  due_at?: string | null;
+  planned_for?: string | null;
+  estimated_minutes?: number | null;
+  blocked_reason?: string | null;
+}
+
+export interface TaskUpdateInput {
+  title?: string;
+  description?: string | null;
+  priority?: TaskPriority;
+  project_id?: string | null;
+  due_at?: string | null;
+  planned_for?: string | null;
+  estimated_minutes?: number | null;
+  blocked_reason?: string | null;
 }
 
 export interface ListTasksOptions {
@@ -44,6 +59,11 @@ function mapRow(row: Task): Task {
     metadata: row.metadata,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    due_at: row.due_at ?? null,
+    planned_for: row.planned_for ?? null,
+    estimated_minutes: row.estimated_minutes ?? null,
+    blocked_reason: row.blocked_reason ?? null,
+    completed_at: row.completed_at ?? null,
   };
 }
 
@@ -102,6 +122,10 @@ export async function createTask(input: TaskInput): Promise<Task> {
       ai_summary: input.ai_summary ?? null,
       suggested_action: input.suggested_action ?? null,
       metadata: input.metadata ?? {},
+      due_at: input.due_at ?? null,
+      planned_for: input.planned_for ?? null,
+      estimated_minutes: input.estimated_minutes ?? null,
+      blocked_reason: input.blocked_reason?.trim() || null,
     })
     .select(COLUMNS)
     .single();
@@ -119,6 +143,49 @@ export async function updateTaskStatus(
   const { data, error } = await admin
     .from("tasks")
     .update({ status })
+    .eq("id", id)
+    .eq("owner_key", AURO_OWNER_KEY)
+    .select(COLUMNS)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as Task) : null;
+}
+
+export async function updateTask(
+  id: string,
+  input: TaskUpdateInput
+): Promise<Task | null> {
+  const admin = createAdminClient();
+  const patch: {
+    title?: string;
+    description?: string | null;
+    priority?: TaskPriority;
+    project_id?: string | null;
+    due_at?: string | null;
+    planned_for?: string | null;
+    estimated_minutes?: number | null;
+    blocked_reason?: string | null;
+  } = {};
+
+  if (input.title !== undefined) patch.title = input.title.trim();
+  if (input.description !== undefined) {
+    patch.description = input.description?.trim() || null;
+  }
+  if (input.priority !== undefined) patch.priority = input.priority;
+  if (input.project_id !== undefined) patch.project_id = input.project_id;
+  if (input.due_at !== undefined) patch.due_at = input.due_at;
+  if (input.planned_for !== undefined) patch.planned_for = input.planned_for;
+  if (input.estimated_minutes !== undefined) {
+    patch.estimated_minutes = input.estimated_minutes;
+  }
+  if (input.blocked_reason !== undefined) {
+    patch.blocked_reason = input.blocked_reason?.trim() || null;
+  }
+
+  const { data, error } = await admin
+    .from("tasks")
+    .update(patch)
     .eq("id", id)
     .eq("owner_key", AURO_OWNER_KEY)
     .select(COLUMNS)

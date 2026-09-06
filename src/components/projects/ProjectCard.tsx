@@ -7,6 +7,7 @@ import {
   PROJECT_STATUS_LABELS,
   PROJECT_TYPE_LABELS,
 } from "@/lib/constants";
+import { deadlineUrgency, formatDateOnly } from "@/lib/intelligence/dates";
 import type { Project } from "@/types/database";
 
 interface ProjectCardProps {
@@ -65,6 +66,34 @@ export function ProjectCard({ project, taskCount = 0, compact }: ProjectCardProp
               </span>
             )}
           </div>
+
+          {(project.blocked_reason || project.deadline || (!compact && project.next_action)) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {project.blocked_reason && (
+                <Badge className="bg-red-500/15 text-red-700 border-red-500/25 dark:text-red-300">
+                  Bloqueado
+                </Badge>
+              )}
+              {project.deadline && (
+                <span
+                  className={
+                    deadlineUrgency(project.deadline) === "overdue"
+                      ? "text-[11px] text-red-400"
+                      : deadlineUrgency(project.deadline) === "today"
+                        ? "text-[11px] text-amber-400"
+                        : "text-[11px] text-auro-muted"
+                  }
+                >
+                  {formatDateOnly(project.deadline)}
+                </span>
+              )}
+              {!compact && project.next_action && (
+                <span className="text-[11px] text-auro-muted truncate max-w-[180px]">
+                  {project.next_action}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </Card>
     </Link>

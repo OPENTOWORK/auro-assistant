@@ -42,30 +42,89 @@ export const projectStatusSchema = z.enum([
   "paused",
 ]);
 
-export const projectFormSchema = z.object({
-  name: z.string().min(1, "El nombre es obligatorio"),
-  description: z.string().optional().nullable(),
-  type: projectTypeSchema,
-  status: projectStatusSchema,
-  priority: z.number().int().min(1),
-  icon: z.string().min(1).default("folder"),
-  color: z.string().min(1).default("#3b82f6"),
-  slug: z.string().optional(),
-});
+const emptyToNull = (value: unknown) => {
+  if (value === "" || value === undefined) return null;
+  return value;
+};
+
+const optionalText = (max: number) =>
+  z.preprocess(emptyToNull, z.string().trim().max(max).nullable());
+
+const optionalDateOnly = z.preprocess(
+  emptyToNull,
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida")
+    .nullable()
+);
+
+const optionalDateTime = z.preprocess(emptyToNull, z.string().refine((value) => {
+  if (value === null) return true;
+  return !Number.isNaN(new Date(value).getTime());
+}, "Fecha/hora no válida").nullable());
+
+const optionalMinutes = z.preprocess((value) => {
+  if (value === "" || value === undefined || value === null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+}, z.number().int().min(1).max(1440).nullable());
+
+export const projectFormSchema = z
+  .object({
+    name: z.string().min(1, "El nombre es obligatorio"),
+    description: z.string().optional().nullable(),
+    type: projectTypeSchema,
+    status: projectStatusSchema,
+    priority: z.number().int().min(1),
+    icon: z.string().min(1).default("folder"),
+    color: z.string().min(1).default("#3b82f6"),
+    slug: z.string().optional(),
+    objective: optionalText(2000).optional(),
+    deadline: optionalDateOnly.optional(),
+    next_action: optionalText(1000).optional(),
+    blocked_reason: optionalText(2000).optional(),
+  })
+  .strict();
 
 const optionalUuid = z.preprocess((value) => {
   if (value === "" || value === undefined) return null;
   return value;
 }, z.string().uuid().nullable());
 
-export const createTaskSchema = z.object({
-  title: z.string().min(1, "El título es obligatorio"),
-  description: z.string().optional().nullable(),
-  project_id: optionalUuid.optional(),
-  project_slug: z.string().optional().nullable(),
-  priority: taskPrioritySchema.default("medium"),
-  source: taskSourceSchema.default("manual"),
-});
+export const createTaskSchema = z
+  .object({
+    title: z.string().min(1, "El título es obligatorio"),
+    description: z.string().optional().nullable(),
+    project_id: optionalUuid.optional(),
+    project_slug: z.string().optional().nullable(),
+    priority: taskPrioritySchema.default("medium"),
+    source: taskSourceSchema.default("manual"),
+    due_at: optionalDateTime.optional(),
+    planned_for: optionalDateOnly.optional(),
+    estimated_minutes: optionalMinutes.optional(),
+    blocked_reason: optionalText(2000).optional(),
+  })
+  .strict();
+
+export const updateTaskSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    description: optionalText(2000).optional(),
+    priority: taskPrioritySchema.optional(),
+    project_id: optionalUuid.optional(),
+    due_at: optionalDateTime.optional(),
+    planned_for: optionalDateOnly.optional(),
+    estimated_minutes: optionalMinutes.optional(),
+    blocked_reason: optionalText(2000).optional(),
+  })
+  .strict();
+
+export const updateTaskStatusBodySchema = z
+  .object({
+    status: taskStatusSchema,
+  })
+  .strict();
 
 export const alertSeveritySchema = z.enum(["info", "warning", "critical"]);
 

@@ -4,12 +4,8 @@ import { sortProjectsByPriority } from "@/lib/project-utils";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 import type { Project, ProjectStatus, ProjectType } from "@/types/database";
 
-/**
- * Repositorio de proyectos. owner_key lo decide el servidor.
- */
-
 const COLUMNS =
-  "id, slug, name, description, type, status, priority, icon, color, url, created_at";
+  "id, slug, name, description, type, status, priority, icon, color, url, created_at, objective, deadline, next_action, blocked_reason, last_activity_at";
 
 const DEFAULT_LIMIT = 200;
 
@@ -25,6 +21,11 @@ interface ProjectRow {
   color: string;
   url: string | null;
   created_at: string;
+  objective: string | null;
+  deadline: string | null;
+  next_action: string | null;
+  blocked_reason: string | null;
+  last_activity_at: string;
 }
 
 export interface ProjectInput {
@@ -37,6 +38,10 @@ export interface ProjectInput {
   color: string;
   slug: string;
   url?: string | null;
+  objective?: string | null;
+  deadline?: string | null;
+  next_action?: string | null;
+  blocked_reason?: string | null;
 }
 
 function mapRow(row: ProjectRow): Project {
@@ -52,6 +57,11 @@ function mapRow(row: ProjectRow): Project {
     color: row.color,
     url: row.url,
     created_at: row.created_at,
+    objective: row.objective ?? null,
+    deadline: row.deadline ?? null,
+    next_action: row.next_action ?? null,
+    blocked_reason: row.blocked_reason ?? null,
+    last_activity_at: row.last_activity_at ?? row.created_at,
   };
 }
 
@@ -67,6 +77,10 @@ function toRow(input: ProjectInput) {
     icon: input.icon,
     color: input.color,
     url: input.url?.trim() || null,
+    objective: input.objective?.trim() || null,
+    deadline: input.deadline || null,
+    next_action: input.next_action?.trim() || null,
+    blocked_reason: input.blocked_reason?.trim() || null,
   };
 }
 
@@ -145,11 +159,6 @@ export async function updateProject(
   return data ? mapRow(data as ProjectRow) : null;
 }
 
-/**
- * Borra un proyecto. Las tareas, alertas, eventos y recurrentes asociados
- * no se borran: su `project_id` pasa a NULL por la clave foránea
- * `ON DELETE SET NULL`.
- */
 export async function deleteProject(id: string): Promise<boolean> {
   const admin = createAdminClient();
 

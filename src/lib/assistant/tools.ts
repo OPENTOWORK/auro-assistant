@@ -1,6 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchDashboardData } from "@/lib/api/dashboard-data";
 import { listProjects } from "@/lib/repositories/projects";
+import { listTasks } from "@/lib/repositories/tasks";
+import {
+  daysSinceActivity,
+  isProjectOverdue,
+  isProjectStalled,
+  isTaskOverdue,
+  isTaskPlannedToday,
+} from "@/lib/intelligence/project-health";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 import { isSupabaseConfigured } from "@/lib/config";
 import {
@@ -17,11 +25,32 @@ export async function runAssistantTool(
   conversationId?: string
 ): Promise<unknown> {
   switch (name) {
-    case "get_projects":
-      return { projects: await listProjects() };
+    case "get_projects": {
+      const projects = await listProjects();
+      return {
+        projects: projects.map((project) => ({
+          id: project.id,
+          slug: project.slug,
+          name: project.name,
+          description: project.description,
+          type: project.type,
+          status: project.status,
+          priority: project.priority,
+          objective: project.objective,
+          deadline: project.deadline,
+          next_action: project.next_action,
+          blocked_reason: project.blocked_reason,
+          last_activity_at: project.last_activity_at,
+          stalled: isProjectStalled(project),
+          overdue: isProjectOverdue(project),
+          days_since_activity: daysSinceActivity(project),
+        })),
+      };
+    }
     case "get_tasks": {
-      const dashboard = await fetchDashboardData();
-      let tasks = dashboard.tasks;
+      let tasks = await listTasks({
+        statuses: ["pending", "in_progress", "waiting_approval"],
+      });
       const projectName = String(args.project_name ?? "").toLowerCase();
       if (projectName) {
         const projects = await listProjects();
@@ -35,7 +64,24 @@ export async function runAssistantTool(
             );
       }
       const limit = Number(args.limit ?? 20);
-      return { tasks: tasks.slice(0, limit) };
+      return {
+        tasks: tasks.slice(0, limit).map((task) => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          source: task.source,
+          priority: task.priority,
+          status: task.status,
+          project_id: task.project_id,
+          due_at: task.due_at,
+          planned_for: task.planned_for,
+          estimated_minutes: task.estimated_minutes,
+          blocked_reason: task.blocked_reason,
+          completed_at: task.completed_at,
+          overdue: isTaskOverdue(task),
+          planned_today: isTaskPlannedToday(task),
+        })),
+      };
     }
     case "get_calendar_events": {
       const dashboard = await fetchDashboardData();

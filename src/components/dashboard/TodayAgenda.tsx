@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { ProjectLabel } from "@/components/ui/AppIcon";
@@ -10,6 +11,7 @@ import {
   getTodayCalendarEvents,
   isRecurringCalendarEvent,
 } from "@/lib/recurring-to-calendar";
+import { isTaskPlannedToday } from "@/lib/intelligence/project-health";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent } from "@/types/database";
 
@@ -35,12 +37,13 @@ function recurringIdFromEvent(event: CalendarEvent): string | null {
 }
 
 export function TodayAgenda() {
-  const { calendarEvents, recurringTasks, alerts, loading } = useDashboardData();
+  const { calendarEvents, recurringTasks, alerts, tasks, loading } = useDashboardData();
   const { getById } = useProjects();
   const { isCompleted, toggle } = useRecurringCompletions(recurringTasks);
 
   const today = new Date();
   const todayEvents = getTodayCalendarEvents(calendarEvents, today);
+  const todayTasks = tasks.filter((task) => isTaskPlannedToday(task));
 
   const dateLabel = today.toLocaleDateString("es-ES", {
     weekday: "long",
@@ -57,19 +60,37 @@ export function TodayAgenda() {
         <p className="text-xs text-auro-muted mt-0.5">
           {loading
             ? "Cargando..."
-            : `${todayEvents.length} en agenda${alerts.length > 0 ? ` · ${alerts.length} alertas` : ""}`}
+            : `${todayEvents.length} en agenda${todayTasks.length > 0 ? ` · ${todayTasks.length} tareas` : ""}${alerts.length > 0 ? ` · ${alerts.length} alertas` : ""}`}
         </p>
       </div>
 
       <div className="p-4 space-y-3">
         {loading ? (
           <p className="text-sm text-auro-muted">Cargando agenda...</p>
-        ) : todayEvents.length === 0 && alerts.length === 0 ? (
+        ) : todayEvents.length === 0 && alerts.length === 0 && todayTasks.length === 0 ? (
           <p className="text-sm text-auro-muted py-4 text-center">
             Nada programado para hoy. Disfruta el día o crea una tarea en Tareas.
           </p>
         ) : (
           <>
+            {todayTasks.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-auro-accent">
+                  Tareas para hoy
+                </p>
+                {todayTasks.map((task) => (
+                  <Link key={task.id} href={`/tareas/${task.id}`}>
+                    <Card className="py-2.5 px-3 hover:border-auro-accent/40 transition-colors">
+                      <p className="text-sm font-medium text-auro-text">{task.title}</p>
+                      {task.blocked_reason && (
+                        <p className="text-xs text-red-400 mt-0.5">Bloqueada</p>
+                      )}
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            )}
+
             {alerts.length > 0 && (
               <div className="space-y-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/90">

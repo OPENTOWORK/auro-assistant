@@ -43,7 +43,7 @@ const EMPTY_DASHBOARD: DashboardPayload = {
 };
 
 const TASK_COLUMNS =
-  "id, title, description, source, priority, status, ai_summary, suggested_action, project_id, metadata, created_at, updated_at";
+  "id, title, description, source, priority, status, ai_summary, suggested_action, project_id, metadata, created_at, updated_at, due_at, planned_for, estimated_minutes, blocked_reason, completed_at";
 const ALERT_COLUMNS =
   "id, title, message, severity, is_read, source, project_id, created_at";
 const EMAIL_COLUMNS =

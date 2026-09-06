@@ -19,6 +19,10 @@ export interface ProjectFormData {
   icon: string;
   color: string;
   slug?: string;
+  objective?: string | null;
+  deadline?: string | null;
+  next_action?: string | null;
+  blocked_reason?: string | null;
 }
 
 interface ProjectsContextValue {

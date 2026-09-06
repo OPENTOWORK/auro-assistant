@@ -41,6 +41,10 @@ export function ProjectForm({
     resolveIconName(initial?.icon ?? "folder")
   );
   const [color, setColor] = useState(initial?.color ?? "#3b82f6");
+  const [objective, setObjective] = useState(initial?.objective ?? "");
+  const [deadline, setDeadline] = useState(initial?.deadline?.slice(0, 10) ?? "");
+  const [nextAction, setNextAction] = useState(initial?.next_action ?? "");
+  const [blockedReason, setBlockedReason] = useState(initial?.blocked_reason ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +67,10 @@ export function ProjectForm({
         priority,
         icon,
         color,
+        objective: objective.trim() || null,
+        deadline: deadline || null,
+        next_action: nextAction.trim() || null,
+        blocked_reason: blockedReason.trim() || null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar");
@@ -97,6 +105,52 @@ export function ProjectForm({
             rows={2}
             className={`${inputClass} resize-none`}
             placeholder="Breve descripción del proyecto"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-auro-muted">Objetivo</label>
+          <textarea
+            value={objective}
+            onChange={(e) => setObjective(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            className={`${inputClass} resize-none`}
+            placeholder="Resultado concreto que quieres conseguir"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-auro-muted">Fecha objetivo</label>
+            <input
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-auro-muted">Siguiente acción</label>
+            <input
+              value={nextAction}
+              onChange={(e) => setNextAction(e.target.value)}
+              maxLength={1000}
+              className={inputClass}
+              placeholder="Siguiente paso concreto"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-auro-muted">Bloqueo actual</label>
+          <textarea
+            value={blockedReason}
+            onChange={(e) => setBlockedReason(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            className={`${inputClass} resize-none`}
+            placeholder="Si algo impide avanzar, descríbelo aquí"
           />
         </div>
 
