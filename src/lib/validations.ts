@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidDateOnly } from "@/lib/intelligence/dates";
 
 export const taskSourceSchema = z.enum([
   "gmail",
@@ -54,7 +55,7 @@ const optionalDateOnly = z.preprocess(
   emptyToNull,
   z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida")
+    .refine((value) => isValidDateOnly(value), "Fecha no válida")
     .nullable()
 );
 

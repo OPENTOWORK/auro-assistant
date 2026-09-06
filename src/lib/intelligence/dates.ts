@@ -10,6 +10,32 @@
  * Se parsea con `new Date(iso)` y se muestra en hora local.
  */
 
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MIN_CALENDAR_YEAR = 1900;
+const MAX_CALENDAR_YEAR = 2200;
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return DAYS_IN_MONTH[month - 1] ?? 0;
+}
+
+/** Día de calendario real YYYY-MM-DD. No usa `new Date("YYYY-MM-DD")`. */
+export function isValidDateOnly(value: string): boolean {
+  const match = DATE_ONLY_RE.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < MIN_CALENDAR_YEAR || year > MAX_CALENDAR_YEAR) return false;
+  if (month < 1 || month > 12) return false;
+  return day >= 1 && day <= daysInMonth(year, month);
+}
+
 export function localDateOnly(date = new Date()): string {
   const y = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -20,7 +46,7 @@ export function localDateOnly(date = new Date()): string {
 export function asDateOnly(value: string | null | undefined): string | null {
   if (!value) return null;
   const day = value.slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+  return isValidDateOnly(day) ? day : null;
 }
 
 export function formatDateOnly(value: string | null | undefined): string {
