@@ -20,7 +20,8 @@
     "redeploy:n8n-workflows": "node scripts/redeploy-n8n-workflows.mjs",
     "deactivate:n8n-gmail": "node scripts/deactivate-n8n-gmail.mjs",
     "sync:n8n": "node scripts/sync-n8n-workflows.mjs",
-    "sync:google": "node scripts/sync-google-from-n8n.mjs"
+    "sync:google": "node scripts/sync-google-from-n8n.mjs",
+    "briefing:daily": "node scripts/run-daily-briefing.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
