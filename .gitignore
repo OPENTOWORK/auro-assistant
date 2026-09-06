@@ -25,6 +25,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.auro-local/
 .env
 .env.production
 .env.development

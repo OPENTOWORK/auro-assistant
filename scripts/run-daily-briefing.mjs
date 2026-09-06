@@ -1,17 +1,16 @@
 import { loadEnv } from "./lib/env.mjs";
+import {
+  checkAuroHealth,
+  fetchWithTimeout,
+  parseJsonBody,
+  resolveLocalUrl,
+} from "./lib/local-auro.mjs";
 
-const DEFAULT_LOCAL_URL = "http://127.0.0.1:3000";
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
-const HEALTH_TIMEOUT_MS = 4000;
 const BRIEFING_TIMEOUT_MS = 60_000;
 
 function fail(message) {
   console.error(message);
   process.exit(1);
-}
-
-function loadConfig() {
-  loadEnv();
 }
 
 function requireCronSecret() {
@@ -24,56 +23,6 @@ function requireCronSecret() {
     fail("AURO_CRON_SECRET no configurado correctamente");
   }
   return secret;
-}
-
-function resolveLocalUrl(raw) {
-  const value = (raw ?? "").trim() || DEFAULT_LOCAL_URL;
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    fail("AURO_LOCAL_URL no es una URL válida.");
-  }
-
-  if (parsed.protocol !== "http:") {
-    fail("AURO_LOCAL_URL debe usar http en loopback.");
-  }
-
-  if (parsed.username || parsed.password) {
-    fail("AURO_LOCAL_URL no debe incluir credenciales.");
-  }
-
-  if (!LOOPBACK_HOSTS.has(parsed.hostname)) {
-    fail("AURO_LOCAL_URL debe ser loopback (127.0.0.1, localhost o ::1).");
-  }
-
-  if (parsed.pathname !== "/" && parsed.pathname !== "") {
-    fail("AURO_LOCAL_URL no debe incluir path.");
-  }
-
-  return parsed.origin;
-}
-
-async function fetchWithTimeout(url, options, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function parseJsonBody(text) {
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
 }
 
 function reasonableError(value) {
@@ -133,27 +82,21 @@ function reportSuccess(payload) {
 }
 
 async function main() {
-  loadConfig();
+  loadEnv();
   const secret = requireCronSecret();
-  const baseUrl = resolveLocalUrl(process.env.AURO_LOCAL_URL);
 
-  let healthResponse;
+  let baseUrl;
   try {
-    healthResponse = await fetchWithTimeout(
-      `${baseUrl}/api/health`,
-      { method: "GET", headers: { Accept: "application/json" } },
-      HEALTH_TIMEOUT_MS
-    );
-  } catch {
+    baseUrl = resolveLocalUrl(process.env.AURO_LOCAL_URL);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : "AURO_LOCAL_URL inválida.");
+  }
+
+  const health = await checkAuroHealth(baseUrl);
+  if (health.status === "offline") {
     fail(`AURO local no está disponible en ${baseUrl}`);
   }
-
-  if (!healthResponse.ok) {
-    fail(`AURO local respondió con health inválido en ${baseUrl}`);
-  }
-
-  const healthBody = parseJsonBody(await healthResponse.text());
-  if (healthBody === undefined || healthBody?.ok !== true) {
+  if (health.status === "invalid") {
     fail(`AURO local respondió con health inválido en ${baseUrl}`);
   }
 
