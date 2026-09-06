@@ -193,6 +193,15 @@ export const chatMessageRequestSchema = z
   })
   .strict();
 
+export const conversationIdQuerySchema = z.string().uuid();
+
+export const assistantActionDecisionSchema = z
+  .object({
+    actionId: z.string().uuid(),
+    decision: z.enum(["confirm", "cancel"]),
+  })
+  .strict();
+
 export interface ActionValidationIssue {
   path: string;
   message: string;

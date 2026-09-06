@@ -2,7 +2,11 @@ import { randomUUID } from "crypto";
 import type { ChatMessage, PendingAction } from "@/types/assistant";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
 
-export { isMissingTableError } from "@/lib/supabase/errors";
+/**
+ * Almacén in-memory SOLO para modo local (Supabase no configurado).
+ * Los callers no deben usar estas funciones para ocultar fallos de persistencia
+ * cuando URL/anon de Supabase sí están configurados.
+ */
 
 const conversations = new Map<string, { owner_key: string; title: string }>();
 const messages = new Map<string, ChatMessage[]>();
@@ -136,21 +140,47 @@ export function fallbackUpsertMemory(input: {
   });
 }
 
-export function fallbackConfirmAction(actionId: string) {
+export function fallbackClaimAction(actionId: string): PendingAction | null {
   const action = pendingActions.get(actionId);
-  if (!action || action.status !== "pending") {
-    throw new Error("Acción no encontrada o ya procesada");
+  if (
+    !action ||
+    action.owner_key !== AURO_OWNER_KEY ||
+    action.status !== "pending"
+  ) {
+    return null;
   }
-  action.status = "executed";
-  action.executed_at = new Date().toISOString();
-  pendingActions.set(actionId, action);
-  return action;
+  const claimed: PendingAction = { ...action, status: "confirmed" };
+  pendingActions.set(actionId, claimed);
+  return claimed;
 }
 
-export function fallbackCancelAction(actionId: string) {
+export function fallbackReleaseClaim(actionId: string) {
   const action = pendingActions.get(actionId);
-  if (action && action.status === "pending") {
-    action.status = "cancelled";
-    pendingActions.set(actionId, action);
+  if (action && action.status === "confirmed") {
+    pendingActions.set(actionId, { ...action, status: "pending" });
   }
+}
+
+export function fallbackMarkExecuted(actionId: string): boolean {
+  const action = pendingActions.get(actionId);
+  if (!action || action.status !== "confirmed") return false;
+  pendingActions.set(actionId, {
+    ...action,
+    status: "executed",
+    executed_at: new Date().toISOString(),
+  });
+  return true;
+}
+
+export function fallbackCancelAction(actionId: string): boolean {
+  const action = pendingActions.get(actionId);
+  if (
+    !action ||
+    action.owner_key !== AURO_OWNER_KEY ||
+    action.status !== "pending"
+  ) {
+    return false;
+  }
+  pendingActions.set(actionId, { ...action, status: "cancelled" });
+  return true;
 }

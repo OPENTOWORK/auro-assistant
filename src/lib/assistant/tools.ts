@@ -2,11 +2,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchDashboardData } from "@/lib/api/dashboard-data";
 import { listProjects } from "@/lib/repositories/projects";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
+import { isSupabaseConfigured } from "@/lib/config";
 import {
   fallbackCreatePendingAction,
   fallbackGetConfirmedMemory,
   fallbackGetPendingActions,
-  isMissingTableError,
 } from "@/lib/assistant/fallback-store";
 import type { ActionType, PendingAction } from "@/types/assistant";
 import { parseProposedAction } from "@/lib/assistant/action-schemas";
@@ -64,20 +64,28 @@ export async function runAssistantTool(
         };
       }
 
-      const action = await createPendingAction({
-        action_type: parsed.data.action_type,
-        label: parsed.data.label,
-        payload: { ...parsed.data.payload },
-        conversation_id: conversationId,
-      });
-      return {
-        proposed: true,
-        action_id: action.id,
-        label: action.label,
-        action_type: action.action_type,
-        message:
-          "Acción propuesta. El usuario debe confirmarla en la tarjeta de confirmación.",
-      };
+      try {
+        const action = await createPendingAction({
+          action_type: parsed.data.action_type,
+          label: parsed.data.label,
+          payload: { ...parsed.data.payload },
+          conversation_id: conversationId,
+        });
+        return {
+          proposed: true,
+          action_id: action.id,
+          label: action.label,
+          action_type: action.action_type,
+          message:
+            "Acción propuesta. El usuario debe confirmarla en la tarjeta de confirmación.",
+        };
+      } catch (error) {
+        console.error("[assistant/propose_action]", error);
+        return {
+          proposed: false,
+          error: "persist_failed",
+        };
+      }
     }
     default:
       return { error: `Herramienta desconocida: ${name}` };
@@ -85,9 +93,10 @@ export async function runAssistantTool(
 }
 
 export async function getConfirmedMemory() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!isSupabaseConfigured()) {
     return fallbackGetConfirmedMemory();
   }
+
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("user_memory")
@@ -97,7 +106,6 @@ export async function getConfirmedMemory() {
     .order("category");
 
   if (error) {
-    if (isMissingTableError(error)) return fallbackGetConfirmedMemory();
     throw error;
   }
   return data ?? [];
@@ -109,7 +117,7 @@ export async function createPendingAction(input: {
   payload: Record<string, unknown>;
   conversation_id?: string;
 }): Promise<PendingAction> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!isSupabaseConfigured()) {
     return fallbackCreatePendingAction(input);
   }
 
@@ -128,18 +136,16 @@ export async function createPendingAction(input: {
     .single();
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return fallbackCreatePendingAction(input);
-    }
     throw error;
   }
   return data as PendingAction;
 }
 
 export async function getPendingActions(): Promise<PendingAction[]> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!isSupabaseConfigured()) {
     return fallbackGetPendingActions();
   }
+
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("pending_actions")
@@ -149,7 +155,6 @@ export async function getPendingActions(): Promise<PendingAction[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    if (isMissingTableError(error)) return fallbackGetPendingActions();
     throw error;
   }
   return (data ?? []) as PendingAction[];

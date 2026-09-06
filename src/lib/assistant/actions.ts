@@ -7,15 +7,32 @@ import {
 } from "@/lib/assistant/action-schemas";
 import {
   fallbackCancelAction,
-  fallbackConfirmAction,
-  fallbackGetPendingActions,
+  fallbackClaimAction,
+  fallbackMarkExecuted,
+  fallbackReleaseClaim,
   fallbackUpsertMemory,
-  isMissingTableError,
 } from "@/lib/assistant/fallback-store";
 import type { PendingAction } from "@/types/assistant";
 
+export class ActionConflictError extends Error {
+  constructor(message = "Acción no encontrada o ya procesada") {
+    super(message);
+    this.name = "ActionConflictError";
+  }
+}
+
+export type ActionResult = {
+  ok: boolean;
+  message: string;
+  finalized?: boolean;
+};
+
 function persistFailedMessage() {
   return "No se pudo persistir la acción.";
+}
+
+function executedButNotFinalizedMessage(sideEffectMessage: string) {
+  return `${sideEffectMessage} El estado interno no se pudo cerrar. No confirmes esta acción otra vez.`;
 }
 
 async function upsertMemory(input: {
@@ -58,7 +75,7 @@ function validatedAction(action: PendingAction): ProposedAction | null {
 
 export async function executePendingAction(
   action: PendingAction
-): Promise<{ ok: boolean; message: string }> {
+): Promise<ActionResult> {
   const parsed = validatedAction(action);
   if (!parsed) {
     return { ok: false, message: "Payload de acción inválido." };
@@ -163,52 +180,82 @@ export async function executePendingAction(
   }
 }
 
-export async function confirmAction(actionId: string) {
-  if (!isSupabaseConfigured()) {
-    const action = fallbackGetPendingActions().find((item) => item.id === actionId);
-    if (!action) {
-      throw new Error("Acción no encontrada o ya procesada");
-    }
-    const result = await executePendingAction(action);
-    if (result.ok) {
-      fallbackConfirmAction(actionId);
-    }
+async function confirmActionLocal(actionId: string): Promise<ActionResult> {
+  const claimed = fallbackClaimAction(actionId);
+  if (!claimed) {
+    throw new ActionConflictError();
+  }
+
+  const result = await executePendingAction(claimed);
+  if (!result.ok) {
+    fallbackReleaseClaim(actionId);
     return result;
+  }
+
+  const finalized = fallbackMarkExecuted(actionId);
+  if (!finalized) {
+    return {
+      ok: true,
+      finalized: false,
+      message: executedButNotFinalizedMessage(result.message),
+    };
+  }
+
+  return { ...result, finalized: true };
+}
+
+/**
+ * Confirmación atómica:
+ * pending → confirmed (claim; solo un request gana)
+ * → side effect
+ * → confirmed → executed
+ *
+ * Si el side effect falla ANTES de aplicarse: se intenta confirmed → pending.
+ * Si el side effect ya ocurrió y falla el cierre a executed: se deja confirmed.
+ * No se revierte a pending (evitaría un segundo side effect) y getPendingActions()
+ * solo lista status=pending, así que no reaparece como confirmable.
+ */
+export async function confirmAction(actionId: string): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) {
+    return confirmActionLocal(actionId);
   }
 
   const admin = createAdminClient();
-  const { data: action, error } = await admin
+  const { data: claimed, error: claimError } = await admin
     .from("pending_actions")
-    .select("*")
+    .update({ status: "confirmed" })
     .eq("id", actionId)
     .eq("owner_key", AURO_OWNER_KEY)
     .eq("status", "pending")
-    .single();
+    .select("*")
+    .maybeSingle();
 
-  if (error || !action) {
-    if (error && isMissingTableError(error)) {
-      const fallbackAction = fallbackGetPendingActions().find(
-        (item) => item.id === actionId
-      );
-      if (!fallbackAction) {
-        throw new Error("Acción no encontrada o ya procesada");
-      }
-      const result = await executePendingAction(fallbackAction);
-      if (result.ok) {
-        fallbackConfirmAction(actionId);
-      }
-      return result;
-    }
-    throw new Error("Acción no encontrada o ya procesada");
+  if (claimError) {
+    console.error("[assistant/confirmAction claim]", claimError);
+    throw new Error(persistFailedMessage());
   }
 
-  const result = await executePendingAction(action as PendingAction);
+  if (!claimed) {
+    throw new ActionConflictError();
+  }
+
+  const result = await executePendingAction(claimed as PendingAction);
 
   if (!result.ok) {
+    const { error: releaseError } = await admin
+      .from("pending_actions")
+      .update({ status: "pending" })
+      .eq("id", actionId)
+      .eq("owner_key", AURO_OWNER_KEY)
+      .eq("status", "confirmed");
+
+    if (releaseError) {
+      console.error("[assistant/confirmAction release]", releaseError);
+    }
     return result;
   }
 
-  const { error: updateError } = await admin
+  const { data: finalizedRow, error: finalizeError } = await admin
     .from("pending_actions")
     .update({
       status: "executed",
@@ -216,35 +263,48 @@ export async function confirmAction(actionId: string) {
     })
     .eq("id", actionId)
     .eq("owner_key", AURO_OWNER_KEY)
-    .eq("status", "pending");
+    .eq("status", "confirmed")
+    .select("id")
+    .maybeSingle();
 
-  if (updateError) {
-    return { ok: false, message: persistFailedMessage() };
+  if (finalizeError || !finalizedRow) {
+    console.error("[assistant/confirmAction finalize]", finalizeError);
+    return {
+      ok: true,
+      finalized: false,
+      message: executedButNotFinalizedMessage(result.message),
+    };
   }
 
-  return result;
+  return { ...result, finalized: true };
 }
 
 export async function cancelAction(actionId: string) {
   if (!isSupabaseConfigured()) {
-    fallbackCancelAction(actionId);
+    if (!fallbackCancelAction(actionId)) {
+      throw new ActionConflictError();
+    }
     return { ok: true };
   }
 
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data, error } = await admin
     .from("pending_actions")
     .update({ status: "cancelled" })
     .eq("id", actionId)
     .eq("owner_key", AURO_OWNER_KEY)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
 
   if (error) {
-    if (isMissingTableError(error)) {
-      fallbackCancelAction(actionId);
-      return { ok: true };
-    }
-    throw error;
+    console.error("[assistant/cancelAction]", error);
+    throw new Error(persistFailedMessage());
   }
+
+  if (!data) {
+    throw new ActionConflictError();
+  }
+
   return { ok: true };
 }

@@ -1,17 +1,17 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
+import { isSupabaseConfigured } from "@/lib/config";
 import {
   fallbackGetOrCreateConversation,
   fallbackLoadMessages,
   fallbackSaveMessage,
-  isMissingTableError,
 } from "@/lib/assistant/fallback-store";
 import type { ChatMessage } from "@/types/assistant";
 
 export async function getOrCreateConversation(
   conversationId?: string
 ): Promise<string> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!isSupabaseConfigured()) {
     return fallbackGetOrCreateConversation(conversationId);
   }
 
@@ -22,9 +22,9 @@ export async function getOrCreateConversation(
       .from("chat_conversations")
       .select("id")
       .eq("id", conversationId)
-      .single();
+      .maybeSingle();
+    if (error) throw error;
     if (data?.id) return data.id;
-    if (error && !isMissingTableError(error)) throw error;
   }
 
   const { data, error } = await admin
@@ -34,9 +34,6 @@ export async function getOrCreateConversation(
     .single();
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return fallbackGetOrCreateConversation(conversationId);
-    }
     throw error;
   }
   return data.id;
@@ -46,7 +43,7 @@ export async function loadMessages(
   conversationId: string,
   limit = 40
 ): Promise<ChatMessage[]> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!isSupabaseConfigured()) {
     return fallbackLoadMessages(conversationId, limit);
   }
 
@@ -59,9 +56,6 @@ export async function loadMessages(
     .limit(limit);
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return fallbackLoadMessages(conversationId, limit);
-    }
     throw error;
   }
   return (data ?? []) as ChatMessage[];
@@ -73,7 +67,7 @@ export async function saveMessage(
   content: string,
   metadata: Record<string, unknown> = {}
 ) {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  if (!isSupabaseConfigured()) {
     return fallbackSaveMessage(conversationId, role, content, metadata);
   }
 
@@ -90,16 +84,17 @@ export async function saveMessage(
     .single();
 
   if (error) {
-    if (isMissingTableError(error)) {
-      return fallbackSaveMessage(conversationId, role, content, metadata);
-    }
     throw error;
   }
 
-  await admin
+  const { error: touchError } = await admin
     .from("chat_conversations")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", conversationId);
+
+  if (touchError) {
+    throw touchError;
+  }
 
   return data as ChatMessage;
 }

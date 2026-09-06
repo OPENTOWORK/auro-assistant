@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { confirmAction, cancelAction } from "@/lib/assistant/actions";
+import {
+  ActionConflictError,
+  cancelAction,
+  confirmAction,
+} from "@/lib/assistant/actions";
 import { getPendingActions } from "@/lib/assistant/tools";
 import { requireOwner } from "@/lib/auth/require-owner";
+import { assistantActionDecisionSchema } from "@/lib/assistant/action-schemas";
 
 export async function GET() {
   const auth = await requireOwner();
@@ -10,8 +15,12 @@ export async function GET() {
   try {
     const actions = await getPendingActions();
     return NextResponse.json({ actions });
-  } catch {
-    return NextResponse.json({ actions: [] });
+  } catch (error) {
+    console.error("[api/assistant/actions GET]", error);
+    return NextResponse.json(
+      { error: "No se pudieron cargar las acciones" },
+      { status: 500 }
+    );
   }
 }
 
@@ -19,20 +28,19 @@ export async function POST(request: Request) {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
 
-  let body: { actionId?: string; decision?: "confirm" | "cancel" };
+  let raw: unknown;
   try {
-    body = await request.json();
+    raw = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const { actionId, decision } = body;
-  if (!actionId || !decision) {
-    return NextResponse.json(
-      { error: "actionId y decision son obligatorios" },
-      { status: 400 }
-    );
+  const parsed = assistantActionDecisionSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
+
+  const { actionId, decision } = parsed.data;
 
   try {
     if (decision === "confirm") {
@@ -42,7 +50,16 @@ export async function POST(request: Request) {
     await cancelAction(actionId);
     return NextResponse.json({ ok: true, message: "Acción cancelada." });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Error al procesar";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    if (error instanceof ActionConflictError) {
+      return NextResponse.json(
+        { error: "Acción no encontrada o ya procesada" },
+        { status: 409 }
+      );
+    }
+    console.error("[api/assistant/actions POST]", error);
+    return NextResponse.json(
+      { error: "No se pudo procesar la acción" },
+      { status: 500 }
+    );
   }
 }

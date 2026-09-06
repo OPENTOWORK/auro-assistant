@@ -18,14 +18,29 @@ import {
   runAssistantTool,
 } from "@/lib/assistant/tools";
 import { requireOwner } from "@/lib/auth/require-owner";
-import { chatMessageRequestSchema } from "@/lib/assistant/action-schemas";
+import {
+  chatMessageRequestSchema,
+  conversationIdQuerySchema,
+} from "@/lib/assistant/action-schemas";
 
 export async function GET(request: Request) {
   const auth = await requireOwner();
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);
-  const conversationId = searchParams.get("conversationId") ?? undefined;
+  const rawConversationId = searchParams.get("conversationId");
+  let conversationId: string | undefined;
+
+  if (rawConversationId) {
+    const parsedId = conversationIdQuerySchema.safeParse(rawConversationId);
+    if (!parsedId.success) {
+      return NextResponse.json(
+        { error: "conversationId inválido" },
+        { status: 400 }
+      );
+    }
+    conversationId = parsedId.data;
+  }
 
   try {
     const convId = await getOrCreateConversation(conversationId);
@@ -37,13 +52,8 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("[api/assistant/chat GET]", error);
     return NextResponse.json(
-      {
-        conversationId: null,
-        messages: [],
-        pendingActions: [],
-        error: "Historial no disponible. Ejecuta la migración SQL del asistente.",
-      },
-      { status: 200 }
+      { error: "No se pudo cargar la conversación" },
+      { status: 500 }
     );
   }
 }
@@ -78,7 +88,7 @@ export async function POST(request: Request) {
     await saveMessage(conversationId, "user", message);
 
     const history = await loadMessages(conversationId, 30);
-    const memory = await getConfirmedMemory().catch(() => []);
+    const memory = await getConfirmedMemory();
 
     const systemPrompt = buildSystemPrompt(memory);
     const openai = getOpenAIClient();
@@ -156,9 +166,10 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("[api/assistant/chat POST]", error);
-    const msg =
-      error instanceof Error ? error.message : "Error del asistente";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json(
+      { error: "No se pudo completar la conversación" },
+      { status: 500 }
+    );
   }
 }
 
