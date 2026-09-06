@@ -11,14 +11,19 @@ import {
   buildDailyDecision,
   loadDailyDecisionContext,
 } from "@/lib/intelligence/daily-decision";
-import { listImportantEmails } from "@/lib/repositories/important-emails";
-import { listUnreadAlerts } from "@/lib/repositories/alerts";
-import type { Alert, Project } from "@/types/database";
+import {
+  getImportantEmailSummary,
+  type ImportantEmailSummary,
+} from "@/lib/repositories/important-emails";
+import {
+  getUnreadAlertSummary,
+  type UnreadAlertSummary,
+} from "@/lib/repositories/alerts";
+import type { Project } from "@/types/database";
 import type { DailyDecision, RankedTask } from "@/lib/intelligence/decision-types";
 import type {
   BriefingAlert,
   BriefingBlockedProject,
-  BriefingEmail,
   BriefingOverdueProject,
   BriefingStalledProject,
   DailyBriefing,
@@ -27,8 +32,6 @@ import type {
 export const BRIEFING_MAX_PRIORITIES = 3;
 export const BRIEFING_MAX_SECTION = 5;
 export const BRIEFING_MAX_TODAY_EVENTS = 10;
-export const BRIEFING_EMAIL_FETCH = 20;
-export const BRIEFING_ALERT_FETCH = 50;
 
 function take<T>(items: T[], max: number): T[] {
   return items.slice(0, max);
@@ -115,7 +118,7 @@ export function collectBlockedProjects(
     });
 }
 
-function toBriefingAlert(alert: Alert): BriefingAlert {
+function toBriefingAlert(alert: UnreadAlertSummary["items"][number]): BriefingAlert {
   return {
     id: alert.id,
     title: alert.title,
@@ -131,8 +134,8 @@ export function buildDailyBriefing(input: {
   decision: DailyDecision;
   projects: Project[];
   now: Date;
-  emails: BriefingEmail[];
-  alerts: Alert[];
+  emails: ImportantEmailSummary;
+  alerts: UnreadAlertSummary;
 }): DailyBriefing {
   const { decision, projects, now, emails, alerts } = input;
   const stalled = collectStalledProjects(projects, now);
@@ -164,8 +167,8 @@ export function buildDailyBriefing(input: {
       blocked: take(blockedProjects, BRIEFING_MAX_SECTION),
     },
     inbox: {
-      important_emails: take(emails, BRIEFING_MAX_SECTION),
-      unread_alerts: take(alerts, BRIEFING_MAX_SECTION).map(toBriefingAlert),
+      important_emails: take(emails.items, BRIEFING_MAX_SECTION),
+      unread_alerts: take(alerts.items, BRIEFING_MAX_SECTION).map(toBriefingAlert),
     },
     counts: {
       recommended_tasks: decision.recommended.length,
@@ -177,12 +180,10 @@ export function buildDailyBriefing(input: {
       stalled_projects: stalled.length,
       overdue_projects: overdueProjects.length,
       blocked_projects: blockedProjects.length,
-      important_emails: emails.length,
-      unread_alerts: alerts.length,
-      critical_alerts: alerts.filter((alert) => alert.severity === "critical")
-        .length,
-      warning_alerts: alerts.filter((alert) => alert.severity === "warning")
-        .length,
+      important_emails: emails.total,
+      unread_alerts: alerts.total,
+      critical_alerts: alerts.critical,
+      warning_alerts: alerts.warning,
     },
   };
 }
@@ -195,8 +196,8 @@ export async function getDailyBriefing(
 
   const [context, emails, alerts] = await Promise.all([
     loadDailyDecisionContext(now),
-    listImportantEmails({ limit: BRIEFING_EMAIL_FETCH }),
-    listUnreadAlerts({ limit: BRIEFING_ALERT_FETCH }),
+    getImportantEmailSummary({ limit: BRIEFING_MAX_SECTION }),
+    getUnreadAlertSummary({ limit: BRIEFING_MAX_SECTION }),
   ]);
 
   const decision = buildDailyDecision(context, availableMinutes);

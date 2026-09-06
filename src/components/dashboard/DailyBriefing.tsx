@@ -94,7 +94,9 @@ export function DailyBriefingCard() {
               )}
               <p className="text-xs text-auro-muted">
                 {counts.today_events}{" "}
-                {counts.today_events === 1 ? "evento hoy" : "eventos hoy"}
+                {counts.today_events === 1
+                  ? "evento de calendario hoy"
+                  : "eventos de calendario hoy"}
               </p>
             </div>
 

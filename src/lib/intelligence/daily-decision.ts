@@ -1,6 +1,6 @@
-import { listProjects } from "@/lib/repositories/projects";
-import { listTasks } from "@/lib/repositories/tasks";
-import { listCalendarEvents } from "@/lib/repositories/calendar-events";
+import { listAllProjects } from "@/lib/repositories/projects";
+import { listAllTasks } from "@/lib/repositories/tasks";
+import { listAllCalendarEvents } from "@/lib/repositories/calendar-events";
 import {
   dateOnlyInTimeZone,
   getAuroTimezone,
@@ -30,11 +30,11 @@ export async function loadDailyDecisionContext(
   const today = dateOnlyInTimeZone(now, timezone);
 
   const [projects, tasks, events] = await Promise.all([
-    listProjects(),
-    listTasks({
+    listAllProjects(),
+    listAllTasks({
       statuses: ["pending", "in_progress", "waiting_approval"],
     }),
-    listCalendarEvents({
+    listAllCalendarEvents({
       from: new Date(now.getTime() - CALENDAR_WINDOW_MS),
       to: new Date(now.getTime() + CALENDAR_WINDOW_MS),
     }),

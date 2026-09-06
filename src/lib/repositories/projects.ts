@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isUniqueViolation } from "@/lib/supabase/errors";
 import { sortProjectsByPriority } from "@/lib/project-utils";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
+import { fetchAllPages } from "@/lib/repositories/paginate";
 import type { Project, ProjectStatus, ProjectType } from "@/types/database";
 
 const COLUMNS =
@@ -104,6 +105,23 @@ export async function listProjects(limit = DEFAULT_LIMIT): Promise<Project[]> {
   if (error) throw error;
 
   return sortProjectsByPriority((data ?? []).map((row) => mapRow(row as ProjectRow)));
+}
+
+export async function listAllProjects(): Promise<Project[]> {
+  const admin = createAdminClient();
+
+  return fetchAllPages(async (from, to) => {
+    const { data, error } = await admin
+      .from("projects")
+      .select(COLUMNS)
+      .eq("owner_key", AURO_OWNER_KEY)
+      .order("priority", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (error) throw error;
+    return (data ?? []).map((row) => mapRow(row as ProjectRow));
+  });
 }
 
 export async function getProjectById(id: string): Promise<Project | null> {

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AURO_OWNER_KEY } from "@/lib/assistant/owner";
+import { fetchAllPages } from "@/lib/repositories/paginate";
 import type {
   Task,
   TaskPriority,
@@ -90,6 +91,30 @@ export async function listTasks(
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map((row) => mapRow(row as Task));
+}
+
+export async function listAllTasks(
+  options: Pick<ListTasksOptions, "statuses"> = {}
+): Promise<Task[]> {
+  const admin = createAdminClient();
+
+  return fetchAllPages(async (from, to) => {
+    let query = admin
+      .from("tasks")
+      .select(COLUMNS)
+      .eq("owner_key", AURO_OWNER_KEY)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+
+    if (options.statuses && options.statuses.length > 0) {
+      query = query.in("status", options.statuses);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data ?? []).map((row) => mapRow(row as Task));
+  });
 }
 
 export async function getTaskById(id: string): Promise<Task | null> {
